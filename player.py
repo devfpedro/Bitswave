@@ -159,6 +159,18 @@ class AudioPlayer:
             pass
         return metadata
 
+    @staticmethod
+    def get_cover_art(filepath: str) -> bytes | None:
+        """Retorna os bytes da capa embutida (tag APIC) do MP3, se houver."""
+        try:
+            tags = ID3(filepath)
+            apic_frames = tags.getall("APIC")
+            if apic_frames:
+                return apic_frames[0].data
+        except Exception:
+            pass
+        return None
+
     # ------------------------------------------------------------------
     # Cleanup
     # ------------------------------------------------------------------

@@ -1,10 +1,8 @@
-from player import AudioPlayer
-from ui import AudioPlayerUI
+from ui import App
 
 
 def main() -> None:
-    player = AudioPlayer()
-    app = AudioPlayerUI(player)
+    app = App()
     app.protocol("WM_DELETE_WINDOW", app.on_closing)
     app.mainloop()
 

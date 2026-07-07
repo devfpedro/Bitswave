@@ -1,6 +1,7 @@
 venv/
 __pycache__/
 prints/
+graphify-out/
 *.pyc
 .pytest_cache/
 player_config.json

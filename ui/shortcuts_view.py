@@ -1,7 +1,7 @@
 """Tela de atalhos de teclado (somente leitura, baseada em ui/shortcuts.py)."""
 import customtkinter as ctk
 
-from . import theme
+from . import icons, theme
 from .shortcuts import SHORTCUTS
 from .tooltip import add_tooltip
 
@@ -28,6 +28,7 @@ class ShortcutsView(ctk.CTkFrame):
             fg_color=theme.CARD_BG, hover_color=theme.CARD_BG_HOVER, text_color=theme.TEXT_PRIMARY,
             font=ctk.CTkFont(size=16), command=self._on_back,
         )
+        icons.apply_icon(back_btn, "back", theme.TEXT_PRIMARY, theme.TEXT_PRIMARY)
         back_btn.pack(side="left")
         add_tooltip(back_btn, "Voltar")
 

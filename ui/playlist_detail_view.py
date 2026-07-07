@@ -1,5 +1,6 @@
 """Tela de uma playlist em reprodução: faixas, ordem, edição e exclusão de faixas."""
 import io
+import random
 import tkinter as tk
 from tkinter import filedialog, messagebox
 
@@ -8,9 +9,9 @@ from PIL import Image
 
 from player import AudioPlayer
 
-from . import dialogs, theme
+from . import dialogs, icons, theme
 from .tooltip import add_tooltip
-from .utils import add_settings_button, format_time
+from .utils import build_settings_button, ellipsize, format_time
 
 _COVER_SIZE = 110
 _THUMB_SIZE = 40
@@ -53,13 +54,13 @@ class _TrackRow(ctk.CTkFrame):
         thumb_label.grid(row=0, column=0, rowspan=2, padx=(10, 10), pady=6)
 
         title_label = ctk.CTkLabel(
-            self, text=meta["title"], font=ctk.CTkFont(size=13, weight="bold"),
+            self, text=ellipsize(meta["title"], 30), font=ctk.CTkFont(size=13, weight="bold"),
             text_color=theme.TEXT_PRIMARY, anchor="w",
         )
         title_label.grid(row=0, column=1, sticky="ew", pady=(8, 0))
 
         artist_label = ctk.CTkLabel(
-            self, text=meta["artist"], font=ctk.CTkFont(size=11),
+            self, text=ellipsize(meta["artist"], 38), font=ctk.CTkFont(size=11),
             text_color=theme.TEXT_SECONDARY, anchor="w",
         )
         artist_label.grid(row=1, column=1, sticky="ew", pady=(0, 8))
@@ -74,6 +75,7 @@ class _TrackRow(ctk.CTkFrame):
             fg_color="transparent", hover_color=theme.CARD_BG_HOVER, text_color=theme.TEXT_SECONDARY,
             font=ctk.CTkFont(size=16), command=self._show_menu,
         )
+        icons.apply_icon(menu_btn, "more_vertical", theme.TEXT_SECONDARY, theme.TEXT_PRIMARY, size=16)
         menu_btn.grid(row=0, column=3, rowspan=2, padx=(4, 8))
         add_tooltip(menu_btn, "Remover da playlist")
 
@@ -110,7 +112,6 @@ class PlaylistDetailView(ctk.CTkFrame):
         self._build_header()
         self._build_order_row()
         self._build_tracks_section()
-        add_settings_button(self, self.app)
 
     # ------------------------------------------------------------------
     # Construção da UI
@@ -124,11 +125,13 @@ class PlaylistDetailView(ctk.CTkFrame):
             fg_color=theme.CARD_BG, hover_color=theme.CARD_BG_HOVER, text_color=theme.TEXT_PRIMARY,
             font=ctk.CTkFont(size=14), command=self.app.show_playlist_selection,
         )
+        icons.apply_icon(close_btn, "close", theme.TEXT_PRIMARY, theme.TEXT_PRIMARY)
         close_btn.pack(side="left")
         add_tooltip(close_btn, "Voltar para playlists")
         ctk.CTkLabel(
             bar, text="Playlist", font=ctk.CTkFont(size=13), text_color=theme.TEXT_SECONDARY,
         ).pack(side="left", padx=(10, 0))
+        build_settings_button(bar, self.app).pack(side="right")
 
     def _build_header(self) -> None:
         card = ctk.CTkFrame(self, fg_color=theme.CARD_BG, corner_radius=16)
@@ -171,13 +174,19 @@ class PlaylistDetailView(ctk.CTkFrame):
 
         seg = ctk.CTkFrame(row, fg_color=theme.CARD_BG, corner_radius=16)
         seg.pack(fill="x", pady=(4, 0))
-        for mode, label in _ORDER_LABELS:
+        for index, (mode, label) in enumerate(_ORDER_LABELS):
+            # width=1 (mínimo real): sem isso, CTkButton usa o padrão width=140, que a
+            # 150% de escala de tela vira 210px físicos — 3 botões (630px) não cabem
+            # nos ~540px físicos disponíveis a 400px de janela, e o pack espremia o
+            # último ("Aleatória") a ~78px, cortando o texto. Com width=1 + expand+fill
+            # o pack distribui o espaço real disponível igualmente entre os 3.
+            padx = (10, 2) if index == 0 else (2, 10) if index == len(_ORDER_LABELS) - 1 else 2
             btn = ctk.CTkButton(
-                seg, text=label, corner_radius=14, height=30,
+                seg, text=label, width=1, corner_radius=13, height=30,
                 fg_color="transparent", text_color=theme.TEXT_SECONDARY, font=ctk.CTkFont(size=11),
                 command=lambda m=mode: self._on_set_order_mode(m),
             )
-            btn.pack(side="left", expand=True, fill="x", padx=2, pady=2)
+            btn.pack(side="left", expand=True, fill="x", padx=padx, pady=3)
             self._order_buttons[mode] = btn
 
     def _build_tracks_section(self) -> None:
@@ -205,8 +214,11 @@ class PlaylistDetailView(ctk.CTkFrame):
         self._load_playlist()
 
     def play_from_track(self, position: int) -> None:
-        filepaths = [t["filepath"] for t in self.app.db.get_tracks(self._playlist_id)]
-        self.app.play_queue(filepaths, start_index=position, shuffle=False)
+        """Toca a partir da faixa clicada, seguindo a mesma ordem mostrada na lista."""
+        filepaths = [t["filepath"] for t in self._ordered_tracks()]
+        self.app.play_queue(
+            filepaths, start_index=position, shuffle=self._order_mode == "aleatoria",
+        )
 
     def remove_track(self, track_id: int) -> None:
         self.app.db.remove_track(track_id)
@@ -254,12 +266,27 @@ class PlaylistDetailView(ctk.CTkFrame):
         self._cover_image = ctk.CTkImage(cover_pil, size=(_COVER_SIZE, _COVER_SIZE))
         self._cover_label.configure(image=self._cover_image)
 
+    def _ordered_tracks(self) -> list:
+        """Faixas na ordem do modo atual — a mesma ordem da lista exibida e da reprodução.
+
+        "alfabetica" ordena pelo título ID3 (o texto que o usuário vê na lista), não
+        pelo nome do arquivo: os dois costumam divergir em arquivos baixados, o que
+        fazia a reprodução alfabética parecer fora de ordem. "aleatoria" mantém a
+        exibição sequencial; o sorteio acontece só na hora de tocar.
+        """
+        tracks = list(self.app.db.get_tracks(self._playlist_id))
+        if self._order_mode == "alfabetica":
+            tracks.sort(
+                key=lambda t: AudioPlayer.get_metadata(t["filepath"])["title"].casefold()
+            )
+        return tracks
+
     def _refresh_tracks(self) -> None:
         for row in self._track_rows:
             row.destroy()
         self._track_rows = []
 
-        tracks = self.app.db.get_tracks(self._playlist_id)
+        tracks = self._ordered_tracks()
         if not tracks:
             empty = ctk.CTkLabel(
                 self.scroll, text="Nenhuma música nesta playlist ainda.",
@@ -282,14 +309,16 @@ class PlaylistDetailView(ctk.CTkFrame):
         self.app.db.set_order_mode(self._playlist_id, mode)
         self._order_mode = mode
         self._refresh_order_buttons()
+        self._refresh_tracks()
 
     def _on_play_all(self) -> None:
-        playlist = self.app.db.get_playlist(self._playlist_id)
-        queue = self.app.db.get_playback_queue(self._playlist_id)
+        queue = [t["filepath"] for t in self._ordered_tracks()]
         if not queue:
             messagebox.showinfo("Playlist vazia", "Adicione músicas a esta playlist antes de tocar.")
             return
-        shuffle = playlist["order_mode"] == "aleatoria"
+        shuffle = self._order_mode == "aleatoria"
+        if shuffle:
+            random.shuffle(queue)
         self.app.play_queue(queue, start_index=0, shuffle=shuffle)
 
     def _on_add_tracks(self) -> None:

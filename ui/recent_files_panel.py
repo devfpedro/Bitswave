@@ -3,8 +3,9 @@ import customtkinter as ctk
 
 from player import AudioPlayer
 
-from . import dialogs, theme
+from . import dialogs, icons, theme
 from .tooltip import add_tooltip
+from .utils import ellipsize
 
 _SCAN_INTERVAL_MS = 8000
 _MAX_VISIBLE = 8
@@ -28,29 +29,44 @@ class RecentFilesPanel(ctk.CTkFrame):
 
         self._schedule_scan()
 
+    _LABEL = "Adicionadas recentemente"
+
     def _build_header(self) -> None:
         header = ctk.CTkFrame(self, fg_color="transparent")
         header.grid(row=0, column=0, sticky="ew")
         header.grid_columnconfigure(0, weight=1)
 
+        self._img_chevron_down = icons.get("chevron_down", 16, theme.TEXT_SECONDARY)
+        self._img_chevron_up = icons.get("chevron_up", 16, theme.TEXT_SECONDARY)
+
         self.toggle_btn = ctk.CTkButton(
-            header, text="⌄  Adicionadas recentemente", anchor="w", fg_color="transparent",
+            header, text="⌄  " + self._LABEL, anchor="w", fg_color="transparent",
             hover_color=theme.CARD_BG_HOVER, text_color=theme.TEXT_SECONDARY,
             font=ctk.CTkFont(size=12), height=28, command=self._on_toggle_expanded,
         )
         self.toggle_btn.grid(row=0, column=0, sticky="ew")
+        self._set_toggle_icon(expanded=False)
 
         folders_btn = ctk.CTkButton(
             header, text="📁", width=28, height=28, corner_radius=14,
             fg_color="transparent", hover_color=theme.CARD_BG_HOVER, text_color=theme.TEXT_SECONDARY,
             font=ctk.CTkFont(size=13), command=self._on_manage_folders,
         )
+        icons.apply_icon(folders_btn, "folder", theme.TEXT_SECONDARY, theme.TEXT_PRIMARY, size=16)
         folders_btn.grid(row=0, column=1, padx=(4, 0))
         add_tooltip(folders_btn, "Gerenciar pastas monitoradas")
 
+    def _set_toggle_icon(self, expanded: bool) -> None:
+        img = self._img_chevron_up if expanded else self._img_chevron_down
+        if img is not None:
+            self.toggle_btn.configure(image=img, text="  " + self._LABEL, compound="left")
+        else:
+            prefix = "⌃" if expanded else "⌄"
+            self.toggle_btn.configure(text=f"{prefix}  {self._LABEL}")
+
     def _build_list(self) -> None:
         self.list_frame = ctk.CTkScrollableFrame(
-            self, fg_color=theme.CARD_BG, corner_radius=10, height=150,
+            self, fg_color=theme.CARD_BG, corner_radius=10, height=108,
         )
         self.list_frame.grid(row=1, column=0, sticky="ew", pady=(4, 0))
         self.list_frame.grid_columnconfigure(0, weight=1)
@@ -65,12 +81,12 @@ class RecentFilesPanel(ctk.CTkFrame):
     def _collapse(self) -> None:
         self._expanded = False
         self.list_frame.grid_remove()
-        self.toggle_btn.configure(text="⌄  Adicionadas recentemente")
+        self._set_toggle_icon(expanded=False)
 
     def _expand(self) -> None:
         self._expanded = True
         self.list_frame.grid()
-        self.toggle_btn.configure(text="⌃  Adicionadas recentemente")
+        self._set_toggle_icon(expanded=True)
         self._render_rows()
 
     # ------------------------------------------------------------------
@@ -117,7 +133,7 @@ class RecentFilesPanel(ctk.CTkFrame):
         for index, filepath in enumerate(self._last_scan):
             meta = AudioPlayer.get_metadata(filepath)
             row = ctk.CTkButton(
-                self.list_frame, text=f"{meta['title']}  —  {meta['artist']}",
+                self.list_frame, text=ellipsize(f"{meta['title']}  —  {meta['artist']}", 52),
                 anchor="w", fg_color="transparent", hover_color=theme.CARD_BG_HOVER,
                 text_color=theme.TEXT_PRIMARY, font=ctk.CTkFont(size=12), height=30,
                 command=lambda i=index: self._on_play_recent(i),

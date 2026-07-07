@@ -1,7 +1,7 @@
 """Funções utilitárias compartilhadas entre as views."""
 import customtkinter as ctk
 
-from . import theme
+from . import icons, theme
 from .tooltip import add_tooltip
 
 
@@ -13,18 +13,27 @@ def format_time(seconds: float) -> str:
     return f"{m:02d}:{s:02d}"
 
 
-def add_settings_button(view: ctk.CTkFrame, app) -> ctk.CTkButton:
-    """Ícone de engrenagem fixo no canto inferior esquerdo, abre a tela de atalhos.
+def ellipsize(text: str, max_chars: int) -> str:
+    """Trunca com reticências: labels do customtkinter não cortam nem quebram sozinhos,
+    então textos longos (títulos de músicas) estouravam a largura da janela."""
+    return text if len(text) <= max_chars else text[: max_chars - 1].rstrip() + "…"
 
-    Sem fundo (apenas o glifo) para não cobrir visualmente o conteúdo das listas
-    roláveis que ficam por baixo dele; o hover_color ainda dá feedback ao passar o mouse.
+
+def build_settings_button(container: ctk.CTkFrame, app) -> ctk.CTkButton:
+    """Botão de engrenagem que abre a tela de atalhos.
+
+    Fica dentro da topbar de cada tela (o chamador decide o pack/grid) em vez de
+    flutuar por cima do conteúdo com `.place()`: um overlay fixo no canto inferior
+    ficava por cima das listas roláveis (o `fg_color="transparent"` só reproduz a cor
+    de fundo do próprio botão, não deixa ver o que está atrás dele na pilha de widgets),
+    cobrindo texto de faixas/itens conforme a lista crescia. Encaixado na topbar, o
+    espaço dele nunca se sobrepõe ao conteúdo rolável abaixo, em qualquer tamanho de janela.
     """
     btn = ctk.CTkButton(
-        view, text="⚙", width=36, height=36, corner_radius=18,
+        container, text="⚙", width=36, height=36, corner_radius=18,
         fg_color="transparent", hover_color=theme.CARD_BG_HOVER, text_color=theme.TEXT_SECONDARY,
         font=ctk.CTkFont(size=16), command=app.show_shortcuts,
     )
-    btn.place(relx=0.0, rely=1.0, x=16, y=-16, anchor="sw")
-    btn.lift()
+    icons.apply_icon(btn, "settings", theme.TEXT_SECONDARY, theme.TEXT_PRIMARY)
     add_tooltip(btn, "Atalhos de teclado")
     return btn

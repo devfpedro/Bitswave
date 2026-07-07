@@ -3,7 +3,8 @@ from tkinter import filedialog
 
 import customtkinter as ctk
 
-from . import theme
+from . import icons, theme
+from .utils import ellipsize
 
 
 class _ModalDialog(ctk.CTkToplevel):
@@ -204,13 +205,16 @@ def manage_folders_dialog(parent, folders: list[str]) -> list[str] | None:
             row.grid(row=i, column=0, sticky="ew", pady=2)
             row.grid_columnconfigure(0, weight=1)
             ctk.CTkLabel(
-                row, text=folder, font=ctk.CTkFont(size=12), text_color=theme.TEXT_PRIMARY, anchor="w",
+                row, text=ellipsize(folder, 42), font=ctk.CTkFont(size=12),
+                text_color=theme.TEXT_PRIMARY, anchor="w",
             ).grid(row=0, column=0, sticky="ew", padx=(4, 8))
-            ctk.CTkButton(
+            remove_btn = ctk.CTkButton(
                 row, text="✕", width=26, height=26, corner_radius=13,
                 fg_color="transparent", hover_color=theme.CARD_BG_HOVER, text_color=theme.DANGER,
                 font=ctk.CTkFont(size=12), command=lambda f=folder: _remove(f),
-            ).grid(row=0, column=1)
+            )
+            icons.apply_icon(remove_btn, "remove", theme.DANGER, theme.DANGER_HOVER, size=16)
+            remove_btn.grid(row=0, column=1)
 
     def _add_folder() -> None:
         chosen = filedialog.askdirectory(title="Selecionar pasta para monitorar", parent=dialog)

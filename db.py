@@ -137,7 +137,12 @@ class PlaylistDB:
         ).fetchall()
 
     def get_playback_queue(self, playlist_id: int) -> list[str]:
-        """Caminhos das faixas já ordenados conforme order_mode da playlist, prontos para tocar."""
+        """Caminhos das faixas ordenados conforme order_mode da playlist.
+
+        Nota: o modo "alfabetica" aqui ordena pelo nome do arquivo (esta camada não
+        lê tags ID3). A tela de detalhe (PlaylistDetailView._ordered_tracks) ordena
+        pelo título ID3 exibido, que é o comportamento usado na UI.
+        """
         playlist = self.get_playlist(playlist_id)
         order_mode = playlist["order_mode"] if playlist else "sequencial"
         filepaths = [row["filepath"] for row in self.get_tracks(playlist_id)]

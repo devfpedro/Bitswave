@@ -1,6 +1,6 @@
 venv/
 __pycache__/
-models/
+prints/
 *.pyc
 .pytest_cache/
 player_config.json

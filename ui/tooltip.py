@@ -25,7 +25,7 @@ class _Tooltip:
         label = tk.Label(
             tw, text=self.text, justify="left", background=theme.CARD_BG_HOVER,
             foreground=theme.TEXT_PRIMARY, relief="solid", borderwidth=1,
-            font=("Segoe UI", 9), padx=8, pady=4,
+            font=("Segoe UI", 10), padx=10, pady=6,
         )
         label.pack()
         tw.update_idletasks()

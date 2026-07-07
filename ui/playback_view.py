@@ -12,10 +12,10 @@ import pygame
 import audio_spectrum
 from player import AudioPlayer
 
-from . import theme
+from . import icons, theme
 from .recent_files_panel import RecentFilesPanel
 from .tooltip import add_tooltip
-from .utils import add_settings_button, format_time as _format_time
+from .utils import build_settings_button, ellipsize as _ellipsize, format_time as _format_time
 from .waveform import WaveformCanvas
 
 CONFIG_FILE = os.path.join(
@@ -63,7 +63,6 @@ class PlaybackView(ctk.CTkFrame):
         self.recent_files_panel = RecentFilesPanel(self, self.app)
         self.recent_files_panel.grid(row=5, column=0, sticky="ew", padx=16, pady=(0, 4))
         ctk.CTkFrame(self, fg_color="transparent").grid(row=6, column=0, sticky="nsew")
-        add_settings_button(self, self.app)
 
         self._start_update_loop()
 
@@ -82,11 +81,18 @@ class PlaybackView(ctk.CTkFrame):
         )
         self.btn_menu = ctk.CTkButton(bar, text=self.ICON_MENU, command=self._on_open_playlists, **icon_cfg)
         self.btn_menu.grid(row=0, column=0, sticky="w")
+        icons.apply_icon(self.btn_menu, "menu", theme.TEXT_PRIMARY, theme.ACCENT)
         add_tooltip(self.btn_menu, "Abrir playlists")
 
-        self.btn_add = ctk.CTkButton(bar, text=self.ICON_ADD, command=self._on_add_files, **icon_cfg)
-        self.btn_add.grid(row=0, column=2, sticky="e")
+        right_box = ctk.CTkFrame(bar, fg_color="transparent")
+        right_box.grid(row=0, column=2, sticky="e")
+
+        self.btn_add = ctk.CTkButton(right_box, text=self.ICON_ADD, command=self._on_add_files, **icon_cfg)
+        self.btn_add.pack(side="left")
+        icons.apply_icon(self.btn_add, "add", theme.TEXT_PRIMARY, theme.ACCENT)
         add_tooltip(self.btn_add, "Adicionar músicas")
+
+        build_settings_button(right_box, self.app).pack(side="left", padx=(8, 0))
 
     def _build_waveform(self) -> None:
         self.waveform = WaveformCanvas(self, height=130, bg=theme.BG_DARK)
@@ -134,56 +140,83 @@ class PlaybackView(ctk.CTkFrame):
 
     def _build_controls(self) -> None:
         frame = ctk.CTkFrame(self, fg_color="transparent")
-        frame.grid(row=4, column=0, sticky="ew", padx=16, pady=(8, 24))
+        frame.grid(row=4, column=0, sticky="ew", padx=16, pady=(4, 12))
+
+        # Shuffle/repeat ficam numa fileira própria, separada dos 4 botões de transporte
+        # principais (prev/play/stop/next). Testes com o app real mostraram que, em janelas
+        # estreitas com o Windows em 150% de escala (DPI alta), 6 colunas numa única fileira
+        # não cabem de forma confiável — o último botão acaba sem largura para o ícone
+        # renderizar. Duas fileiras eliminam esse limite de espaço por completo.
+        mode_row = ctk.CTkFrame(frame, fg_color="transparent")
+        mode_row.pack(pady=(0, 6))
+
+        mode_cfg = dict(
+            width=32, height=32, corner_radius=16, font=ctk.CTkFont(size=13),
+            fg_color="transparent", hover_color=theme.CARD_BG_HOVER, text_color=theme.TEXT_SECONDARY,
+        )
+        self.btn_shuffle = ctk.CTkButton(mode_row, text=self.ICON_SHUFFLE, command=self._on_toggle_shuffle, **mode_cfg)
+        self.btn_shuffle.pack(side="left", padx=10)
+        icons.apply_icon(self.btn_shuffle, "shuffle", theme.TEXT_SECONDARY, theme.TEXT_PRIMARY)
+        add_tooltip(self.btn_shuffle, "Aleatório")
+
+        self.btn_repeat = ctk.CTkButton(mode_row, text=self.ICON_REPEAT, command=self._on_cycle_repeat, **mode_cfg)
+        self.btn_repeat.pack(side="left", padx=10)
+        add_tooltip(self.btn_repeat, "Repetir")
+        self._img_repeat = icons.get("repeat", 18, theme.TEXT_SECONDARY)
+        self._img_repeat_one = icons.get("repeat_one", 18, theme.TEXT_SECONDARY)
+        self._set_repeat_icon()
 
         btn_row = ctk.CTkFrame(frame, fg_color="transparent")
         btn_row.pack(expand=True)
 
-        mode_cfg = dict(
-            width=36, height=36, corner_radius=18, font=ctk.CTkFont(size=14),
-            fg_color="transparent", text_color=theme.TEXT_SECONDARY,
-        )
+        # Dimensões medidas empiricamente: com ícones-imagem o CTkButton cresce além
+        # do width= pedido, e a 150% de DPI a fileira de 4 botões estourava a largura
+        # mínima da janela (360px), cortando o botão "próxima". Com 44/58 + ícones
+        # 24/20 + padx 3/4 a fileira mede 474px físicos contra 492 disponíveis.
         btn_cfg = dict(
-            width=48, height=48, corner_radius=24, font=ctk.CTkFont(size=18),
+            width=44, height=44, corner_radius=22, font=ctk.CTkFont(size=17),
             fg_color=theme.CARD_BG, hover_color=theme.CARD_BG_HOVER, text_color=theme.TEXT_PRIMARY,
         )
 
-        self.btn_shuffle = ctk.CTkButton(btn_row, text=self.ICON_SHUFFLE, command=self._on_toggle_shuffle, **mode_cfg)
-        self.btn_shuffle.pack(side="left", padx=(0, 8))
-        add_tooltip(self.btn_shuffle, "Aleatório")
-
         self.btn_prev = ctk.CTkButton(btn_row, text=self.ICON_PREV, command=self._on_prev, **btn_cfg)
-        self.btn_prev.pack(side="left", padx=4)
+        self.btn_prev.pack(side="left", padx=3)
+        icons.apply_icon(self.btn_prev, "prev", theme.TEXT_PRIMARY, theme.ACCENT, size=24, hover_size=26)
         add_tooltip(self.btn_prev, "Anterior")
 
         self.btn_play = ctk.CTkButton(
             btn_row, text=self.ICON_PLAY, command=self._on_play_pause,
-            width=64, height=64, corner_radius=32, font=ctk.CTkFont(size=24),
+            width=58, height=58, corner_radius=29, font=ctk.CTkFont(size=22),
             fg_color=theme.ACCENT, hover_color=theme.ACCENT_HOVER,
         )
-        self.btn_play.pack(side="left", padx=6)
+        self.btn_play.pack(side="left", padx=4)
         add_tooltip(self.btn_play, "Reproduzir / Pausar")
+        self._img_play = icons.get("play", 20, theme.TEXT_PRIMARY)
+        self._img_pause = icons.get("pause", 20, theme.TEXT_PRIMARY)
+        self._set_play_icon(False)
 
         self.btn_stop = ctk.CTkButton(btn_row, text=self.ICON_STOP, command=self._on_stop, **btn_cfg)
-        self.btn_stop.pack(side="left", padx=4)
+        self.btn_stop.pack(side="left", padx=3)
+        icons.apply_icon(self.btn_stop, "stop", theme.TEXT_PRIMARY, theme.ACCENT, size=24, hover_size=26)
         add_tooltip(self.btn_stop, "Parar")
 
         self.btn_next = ctk.CTkButton(btn_row, text=self.ICON_NEXT, command=self._on_next, **btn_cfg)
-        self.btn_next.pack(side="left", padx=4)
+        self.btn_next.pack(side="left", padx=3)
+        icons.apply_icon(self.btn_next, "next", theme.TEXT_PRIMARY, theme.ACCENT, size=24, hover_size=26)
         add_tooltip(self.btn_next, "Próxima")
-
-        self.btn_repeat = ctk.CTkButton(btn_row, text=self.ICON_REPEAT, command=self._on_cycle_repeat, **mode_cfg)
-        self.btn_repeat.pack(side="left", padx=(8, 0))
-        add_tooltip(self.btn_repeat, "Repetir")
 
         vol_row = ctk.CTkFrame(frame, fg_color="transparent")
         vol_row.pack(pady=(14, 0))
         self.lbl_volume_icon = ctk.CTkLabel(
-            vol_row, text=self._volume_icon_for(0.7), font=ctk.CTkFont(size=16),
+            vol_row, text="", font=ctk.CTkFont(size=16),
             text_color=theme.TEXT_SECONDARY, width=22,
         )
         self.lbl_volume_icon.pack(side="left", padx=(0, 6))
         add_tooltip(self.lbl_volume_icon, "Volume")
+        self._img_volume = {
+            level: icons.get(f"volume_{level}", 18, theme.TEXT_SECONDARY)
+            for level in ("mute", "low", "mid", "high")
+        }
+        self._set_volume_icon(0.7)
         self.slider_volume = ctk.CTkSlider(
             vol_row, from_=0, to=1, width=140,
             progress_color=theme.ACCENT, button_color=theme.ACCENT, button_hover_color=theme.ACCENT_HOVER,
@@ -210,7 +243,7 @@ class PlaybackView(ctk.CTkFrame):
         start_index = max(0, min(start_index, len(self._queue) - 1))
         if self._load_track(start_index):
             self.player.play()
-            self.btn_play.configure(text=self.ICON_PAUSE)
+            self._set_play_icon(True)
             self.waveform.set_playing(True)
 
     def save_state(self) -> None:
@@ -275,7 +308,7 @@ class PlaybackView(ctk.CTkFrame):
         self._queue.extend(f for f in files if f not in self._queue)
         if start_fresh and self._load_track(0):
             self.player.play()
-            self.btn_play.configure(text=self.ICON_PAUSE)
+            self._set_play_icon(True)
             self.waveform.set_playing(True)
 
     def _reset_now_playing(self) -> None:
@@ -284,7 +317,7 @@ class PlaybackView(ctk.CTkFrame):
         self.lbl_duration.configure(text="00:00")
         self.lbl_elapsed.configure(text="00:00")
         self.slider_progress.set(0)
-        self.btn_play.configure(text=self.ICON_PLAY)
+        self._set_play_icon(False)
         self.waveform.set_playing(False)
         self._current_duration = 0.0
         self._elapsed_offset = 0.0
@@ -320,8 +353,8 @@ class PlaybackView(ctk.CTkFrame):
         self._load_spectrum(filepath)
 
         meta = AudioPlayer.get_metadata(filepath)
-        self.lbl_title.configure(text=meta["title"])
-        self.lbl_artist.configure(text=meta["artist"])
+        self.lbl_title.configure(text=_ellipsize(meta["title"], 32))
+        self.lbl_artist.configure(text=_ellipsize(meta["artist"], 48))
         self.lbl_duration.configure(text=_format_time(self._current_duration))
         self.slider_progress.set(0)
         self.lbl_elapsed.configure(text="00:00")
@@ -364,23 +397,23 @@ class PlaybackView(ctk.CTkFrame):
             return
         if self.player.is_playing():
             self.player.pause()
-            self.btn_play.configure(text=self.ICON_PLAY)
+            self._set_play_icon(False)
             self.waveform.set_playing(False)
         elif self.player.is_paused():
             self.player.unpause()
-            self.btn_play.configure(text=self.ICON_PAUSE)
+            self._set_play_icon(True)
             self.waveform.set_playing(True)
         else:
             if self._index == -1:
                 if not self._load_track(0):
                     return
             self.player.play()
-            self.btn_play.configure(text=self.ICON_PAUSE)
+            self._set_play_icon(True)
             self.waveform.set_playing(True)
 
     def _on_stop(self) -> None:
         self.player.stop()
-        self.btn_play.configure(text=self.ICON_PLAY)
+        self._set_play_icon(False)
         self.slider_progress.set(0)
         self.lbl_elapsed.configure(text="00:00")
         self._elapsed_offset = 0.0
@@ -404,7 +437,7 @@ class PlaybackView(ctk.CTkFrame):
         if not self._load_track(self._prev_index_manual()):
             return
         self.player.play()
-        self.btn_play.configure(text=self.ICON_PAUSE)
+        self._set_play_icon(True)
         self.waveform.set_playing(True)
 
     def _on_next(self) -> None:
@@ -413,22 +446,32 @@ class PlaybackView(ctk.CTkFrame):
         if not self._load_track(self._next_index_manual()):
             return
         self.player.play()
-        self.btn_play.configure(text=self.ICON_PAUSE)
+        self._set_play_icon(True)
         self.waveform.set_playing(True)
 
+    _VOLUME_TEXT = {"mute": "🔇", "low": "🔈", "mid": "🔉", "high": "🔊"}
+
     @staticmethod
-    def _volume_icon_for(value: float) -> str:
+    def _volume_level_for(value: float) -> str:
         if value <= 0.0:
-            return "🔇"
+            return "mute"
         if value < 0.34:
-            return "🔈"
+            return "low"
         if value < 0.67:
-            return "🔉"
-        return "🔊"
+            return "mid"
+        return "high"
+
+    def _set_volume_icon(self, value: float) -> None:
+        level = self._volume_level_for(value)
+        img = self._img_volume.get(level)
+        if img is not None:
+            self.lbl_volume_icon.configure(image=img, text="")
+        else:
+            self.lbl_volume_icon.configure(text=self._VOLUME_TEXT[level])
 
     def _on_volume_change(self, value: float) -> None:
         self.player.set_volume(value)
-        self.lbl_volume_icon.configure(text=self._volume_icon_for(value))
+        self._set_volume_icon(value)
 
     def adjust_volume(self, delta: float) -> None:
         """Aumenta/diminui o volume em `delta` (usado pelos atalhos de teclado ↑/↓)."""
@@ -443,9 +486,26 @@ class PlaybackView(ctk.CTkFrame):
     def _on_cycle_repeat(self) -> None:
         order = ["off", "all", "one"]
         self._repeat_mode = order[(order.index(self._repeat_mode) + 1) % len(order)]
-        icon = self.ICON_REPEAT_ONE if self._repeat_mode == "one" else self.ICON_REPEAT
+        self._set_repeat_icon()
+
+    def _set_play_icon(self, playing: bool) -> None:
+        """Troca o ícone do botão principal entre play/pause (imagem custom, com fallback de texto)."""
+        img = self._img_pause if playing else self._img_play
+        if img is not None:
+            self.btn_play.configure(image=img, text="")
+        else:
+            self.btn_play.configure(text=self.ICON_PAUSE if playing else self.ICON_PLAY)
+
+    def _set_repeat_icon(self) -> None:
+        """Atualiza o ícone/realce do botão de repetição conforme o modo atual."""
         active = self._repeat_mode != "off"
-        self.btn_repeat.configure(text=icon, fg_color=theme.ACCENT_ACTIVE if active else "transparent")
+        img = self._img_repeat_one if self._repeat_mode == "one" else self._img_repeat
+        if img is not None:
+            self.btn_repeat.configure(image=img, text="")
+        else:
+            text = self.ICON_REPEAT_ONE if self._repeat_mode == "one" else self.ICON_REPEAT
+            self.btn_repeat.configure(text=text)
+        self.btn_repeat.configure(fg_color=theme.ACCENT_ACTIVE if active else "transparent")
 
     # ------------------------------------------------------------------
     # Barra de progresso — interação do usuário
@@ -506,13 +566,13 @@ class PlaybackView(ctk.CTkFrame):
         if self._repeat_mode == "one":
             if self._load_track(self._index):
                 self.player.play()
-                self.btn_play.configure(text=self.ICON_PAUSE)
+                self._set_play_icon(True)
                 self.waveform.set_playing(True)
             return
         if self._shuffle and len(self._queue) > 1:
             if self._load_track(self._next_index_manual()):
                 self.player.play()
-                self.btn_play.configure(text=self.ICON_PAUSE)
+                self._set_play_icon(True)
                 self.waveform.set_playing(True)
             return
         if self._index < len(self._queue) - 1:
@@ -520,11 +580,11 @@ class PlaybackView(ctk.CTkFrame):
         elif self._repeat_mode == "all" and self._queue:
             if self._load_track(0):
                 self.player.play()
-                self.btn_play.configure(text=self.ICON_PAUSE)
+                self._set_play_icon(True)
                 self.waveform.set_playing(True)
         else:
             self.player.stop()
-            self.btn_play.configure(text=self.ICON_PLAY)
+            self._set_play_icon(False)
             self.slider_progress.set(0)
             self.lbl_elapsed.configure(text="00:00")
             self._elapsed_offset = 0.0

@@ -8,9 +8,9 @@ from PIL import Image
 
 from player import AudioPlayer
 
-from . import dialogs, theme
+from . import dialogs, icons, theme
 from .tooltip import add_tooltip
-from .utils import add_settings_button
+from .utils import build_settings_button
 
 _COLUMNS = 2
 _COVER_SIZE = 130
@@ -50,6 +50,7 @@ class _PlaylistCard(ctk.CTkFrame):
             fg_color="transparent", hover_color=theme.CARD_BG_HOVER, text_color=theme.TEXT_SECONDARY,
             font=ctk.CTkFont(size=16), command=self._show_menu,
         )
+        icons.apply_icon(self._menu_btn, "more_vertical", theme.TEXT_SECONDARY, theme.TEXT_PRIMARY, size=16)
         self._menu_btn.pack(side="right")
         add_tooltip(self._menu_btn, "Renomear ou excluir")
 
@@ -101,7 +102,6 @@ class PlaylistSelectionView(ctk.CTkFrame):
         self._build_topbar()
         self._build_create_button()
         self._build_grid()
-        add_settings_button(self, self.app)
 
     def _build_topbar(self) -> None:
         bar = ctk.CTkFrame(self, fg_color="transparent")
@@ -112,6 +112,7 @@ class PlaylistSelectionView(ctk.CTkFrame):
             fg_color=theme.CARD_BG, hover_color=theme.CARD_BG_HOVER, text_color=theme.TEXT_PRIMARY,
             font=ctk.CTkFont(size=16), command=self.app.show_playback,
         )
+        icons.apply_icon(back_btn, "back", theme.TEXT_PRIMARY, theme.TEXT_PRIMARY)
         back_btn.pack(side="left")
         add_tooltip(back_btn, "Voltar para reprodução")
 
@@ -123,6 +124,8 @@ class PlaylistSelectionView(ctk.CTkFrame):
         ctk.CTkLabel(
             title_box, text="Suas coleções de músicas", font=ctk.CTkFont(size=12), text_color=theme.TEXT_SECONDARY,
         ).pack(anchor="w")
+
+        build_settings_button(bar, self.app).pack(side="right")
 
     def _build_create_button(self) -> None:
         create_btn = ctk.CTkButton(

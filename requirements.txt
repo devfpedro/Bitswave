@@ -2,3 +2,4 @@ customtkinter
 pygame-ce
 mutagen
 pillow
+numpy

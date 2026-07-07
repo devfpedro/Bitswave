@@ -1,12 +1,15 @@
 """Tela principal de reprodução (Now Playing)."""
 import json
 import os
+import queue
 import random
+import threading
 from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
 import pygame
 
+import audio_spectrum
 from player import AudioPlayer
 
 from . import theme
@@ -46,6 +49,8 @@ class PlaybackView(ctk.CTkFrame):
         self._current_duration: float = 0.0
         self._shuffle: bool = False
         self._repeat_mode: str = "off"
+        self._spectrum_queue: queue.Queue = queue.Queue()
+        self._analyzing: set[str] = set()
 
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(6, weight=1)
@@ -312,6 +317,7 @@ class PlaybackView(ctk.CTkFrame):
         self._index = index
         self._elapsed_offset = 0.0
         self._current_duration = AudioPlayer.get_duration(filepath)
+        self._load_spectrum(filepath)
 
         meta = AudioPlayer.get_metadata(filepath)
         self.lbl_title.configure(text=meta["title"])
@@ -320,6 +326,38 @@ class PlaybackView(ctk.CTkFrame):
         self.slider_progress.set(0)
         self.lbl_elapsed.configure(text="00:00")
         return True
+
+    # ------------------------------------------------------------------
+    # Espectro de áudio (waveform reativa à música)
+    # ------------------------------------------------------------------
+
+    def _load_spectrum(self, filepath: str) -> None:
+        """Aplica o espectro em cache ou dispara sua análise em segundo plano."""
+        self.waveform.clear_spectrum()
+        cached = audio_spectrum.get_cached(filepath)
+        if cached is not None:
+            self.waveform.set_spectrum(cached.frames, cached.frame_duration)
+            return
+        if filepath in self._analyzing:
+            return
+        self._analyzing.add(filepath)
+        threading.Thread(target=self._spectrum_worker, args=(filepath,), daemon=True).start()
+
+    def _spectrum_worker(self, filepath: str) -> None:
+        """Roda em thread separada: decodifica e calcula a FFT sem travar a UI."""
+        data = audio_spectrum.analyze(filepath)
+        self._spectrum_queue.put((filepath, data))
+
+    def _drain_spectrum_queue(self) -> None:
+        """Aplica espectros calculados nas threads de análise (chamado no loop principal)."""
+        try:
+            while True:
+                filepath, data = self._spectrum_queue.get_nowait()
+                self._analyzing.discard(filepath)
+                if data is not None and self.player.current_file == filepath:
+                    self.waveform.set_spectrum(data.frames, data.frame_duration)
+        except queue.Empty:
+            pass
 
     def _on_play_pause(self) -> None:
         if not self._queue:
@@ -437,6 +475,7 @@ class PlaybackView(ctk.CTkFrame):
         self.player.seek(target)
         self.slider_progress.set(target / self._current_duration)
         self.lbl_elapsed.configure(text=_format_time(target))
+        self.waveform.set_position(target)
 
     # ------------------------------------------------------------------
     # Loop de atualização
@@ -447,6 +486,7 @@ class PlaybackView(ctk.CTkFrame):
         self._check_music_end()
 
     def _update_progress(self) -> None:
+        self._drain_spectrum_queue()
         if self.player.is_playing() and not self._seeking and self._current_duration > 0:
             pos_sec = self._elapsed_offset + self.player.get_position()
             if pos_sec > self._current_duration:
@@ -454,6 +494,7 @@ class PlaybackView(ctk.CTkFrame):
             fraction = pos_sec / self._current_duration
             self.slider_progress.set(fraction)
             self.lbl_elapsed.configure(text=_format_time(pos_sec))
+            self.waveform.set_position(pos_sec)
         self.after(200, self._update_progress)
 
     def _check_music_end(self) -> None:

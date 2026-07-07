@@ -14,9 +14,9 @@ from .playlist_detail_view import PlaylistDetailView
 from .playlist_selection_view import PlaylistSelectionView
 from .shortcuts_view import ShortcutsView
 
-ICON_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models", "iconApp.png"
-)
+_MODELS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models")
+ICON_PATH = os.path.join(_MODELS_DIR, "iconApp.png")
+ICON_ICO_PATH = os.path.join(_MODELS_DIR, "iconApp.ico")
 
 
 class App(ctk.CTk):
@@ -34,8 +34,8 @@ class App(ctk.CTk):
 
         self.title("Bitswave")
         self.wm_iconname("Bitswave")
-        self.geometry("400x640")
-        self.minsize(360, 580)
+        self.geometry("400x580")
+        self.minsize(360, 540)
         self.configure(fg_color=theme.BG_DARK)
         self._set_window_icon()
 
@@ -60,6 +60,14 @@ class App(ctk.CTk):
         self.show_playback()
 
     def _set_window_icon(self) -> None:
+        # iconbitmap (.ico) é o que o Windows realmente usa para o ícone no canto
+        # superior esquerdo da barra de título; iconphoto (.png) cobre a barra de
+        # tarefas/Alt+Tab. Os dois são necessários para o ícone aparecer em todo lugar.
+        if os.path.isfile(ICON_ICO_PATH):
+            try:
+                self.iconbitmap(default=ICON_ICO_PATH)
+            except tk.TclError:
+                pass
         if os.path.isfile(ICON_PATH):
             try:
                 self._icon_image = tk.PhotoImage(file=ICON_PATH)

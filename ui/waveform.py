@@ -6,8 +6,12 @@ from . import theme
 
 
 class WaveformCanvas(tk.Canvas):
-    """Barras estilo equalizador que pulsam enquanto a música toca e ficam
-    em repouso quando pausada/parada. Puramente decorativo (não é uma FFT real)."""
+    """Barras estilo equalizador (espectro de frequência) que reagem à faixa tocando.
+
+    Quando o espectro real da faixa já foi analisado (ver audio_spectrum.py), as barras
+    seguem a energia por banda de frequência no instante atual de reprodução. Antes disso
+    (análise ainda em andamento, ou arquivo não suportado), cai para uma animação
+    decorativa de espera, para a UI nunca ficar parada/vazia."""
 
     _BAR_COUNT = 28
     _BAR_GAP = 4
@@ -18,11 +22,27 @@ class WaveformCanvas(tk.Canvas):
         super().__init__(master, height=height, bg=bg, highlightthickness=0, **kwargs)
         self._playing = False
         self._phase = 0.0
+        self._spectrum_frames: list[list[float]] | None = None
+        self._frame_duration = 0.08
+        self._position = 0.0
         self.bind("<Configure>", lambda e: self._redraw())
         self._animate()
 
     def set_playing(self, playing: bool) -> None:
         self._playing = playing
+
+    def set_spectrum(self, frames: list[list[float]], frame_duration: float) -> None:
+        """Aplica o espectro pré-calculado da faixa atual (ver audio_spectrum.analyze)."""
+        self._spectrum_frames = frames
+        self._frame_duration = frame_duration if frame_duration > 0 else 0.08
+
+    def clear_spectrum(self) -> None:
+        """Volta para a animação decorativa (chamado ao trocar de faixa)."""
+        self._spectrum_frames = None
+
+    def set_position(self, position_sec: float) -> None:
+        """Informa a posição atual de reprodução (segundos), usada para indexar o espectro."""
+        self._position = max(0.0, position_sec)
 
     def _bar_color(self, index: int) -> str:
         colors = theme.ACCENT_GRADIENT
@@ -35,6 +55,15 @@ class WaveformCanvas(tk.Canvas):
     def _bar_height_frac(self, index: int) -> float:
         if not self._playing:
             return self._MIN_HEIGHT_FRAC
+        if self._spectrum_frames:
+            frame_index = int(self._position / self._frame_duration)
+            frame_index = max(0, min(frame_index, len(self._spectrum_frames) - 1))
+            level = self._spectrum_frames[frame_index][index]
+            return self._MIN_HEIGHT_FRAC + level * (self._MAX_HEIGHT_FRAC - self._MIN_HEIGHT_FRAC)
+        return self._decorative_height_frac(index)
+
+    def _decorative_height_frac(self, index: int) -> float:
+        """Animação de espera usada enquanto o espectro real ainda não está pronto."""
         center = (self._BAR_COUNT - 1) / 2
         distance = abs(index - center) / center if center else 0
         envelope = 1.0 - distance * 0.75

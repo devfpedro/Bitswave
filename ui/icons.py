@@ -149,6 +149,34 @@ def available(name: str) -> bool:
     return os.path.isfile(os.path.join(_ICONS_DIR, f"{name}.png"))
 
 
+def _fix_destroy_leak(button: ctk.CTkButton) -> None:
+    """Contorna um vazamento da customtkinter 6.0.0.
+
+    CTkButton/CTkLabel registram `self._update_image` na lista interna de callbacks
+    do CTkImage (`_configure_callback_list`) sempre que `image=` é definido, mas
+    `destroy()` nunca desregistra isso. Como `get()`/`pair()` acima cacheiam o
+    CTkImage para sempre (`lru_cache`), qualquer botão recriado com frequência
+    (linha de faixa de playlist, card de playlist, item de "pastas monitoradas")
+    reusa o MESMO objeto de imagem — e cada instância destruída continua presa
+    para sempre nessa lista, plantando o botão inteiro (e tudo que ele referencia)
+    fora do alcance do coletor de lixo. Medido empiricamente: 150 recriações de
+    uma lista de 10 faixas deixavam ~3000 objetos vivos por ciclo sem este fix.
+    """
+    original_destroy = button.destroy
+
+    def _destroy() -> None:
+        img = getattr(button, "_image", None)
+        callback = getattr(button, "_update_image", None)
+        if img is not None and callback is not None:
+            try:
+                img.remove_configure_callback(callback)
+            except ValueError:
+                pass
+        original_destroy()
+
+    button.destroy = _destroy
+
+
 def apply_icon(
     button: ctk.CTkButton,
     name: str,
@@ -166,4 +194,5 @@ def apply_icon(
         return False
     button.configure(image=normal_img, text="")
     bind_hover(button, normal_img, hover_img)
+    _fix_destroy_leak(button)
     return True

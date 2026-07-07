@@ -1,11 +1,16 @@
+import json
 import os
+import random
 import tkinter as tk
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 from typing import Callable
 
 import customtkinter as ctk
+import pygame
 
 from player import AudioPlayer
+
+CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "player_config.json")
 
 
 def _format_time(seconds: float) -> str:
@@ -25,6 +30,11 @@ class AudioPlayerUI(ctk.CTk):
     ICON_PAUSE = "⏸"
     ICON_STOP = "⏹"
     ICON_NEXT = "⏭"
+    ICON_SHUFFLE = "🔀"
+    ICON_REPEAT = "🔁"
+    ICON_REPEAT_ONE = "🔂"
+
+    _ACTIVE_COLOR = ("#3B82F6", "#2563EB")
 
     def __init__(self, player: AudioPlayer):
         super().__init__()
@@ -37,6 +47,8 @@ class AudioPlayerUI(ctk.CTk):
         self._seeking: bool = False             # True enquanto o usuário arrasta o slider
         self._elapsed_offset: float = 0.0       # offset acumulado para seek
         self._current_duration: float = 0.0     # duração da música atual
+        self._shuffle: bool = False             # modo aleatório
+        self._repeat_mode: str = "off"          # "off" | "all" | "one"
 
         # --- Configuração da janela ---
         self.title("audioPlayer")
@@ -46,6 +58,8 @@ class AudioPlayerUI(ctk.CTk):
         ctk.set_default_color_theme("blue")
 
         self._build_ui()
+        self._bind_shortcuts()
+        self._load_saved_state()
         self._start_update_loop()
 
     # ==================================================================
@@ -144,6 +158,15 @@ class AudioPlayerUI(ctk.CTk):
         btn_frame.pack(side="left", expand=True)
 
         btn_cfg = dict(width=48, height=48, corner_radius=24, font=ctk.CTkFont(size=18))
+        mode_btn_cfg = dict(
+            width=36, height=36, corner_radius=18, font=ctk.CTkFont(size=14),
+            fg_color="transparent", text_color=("gray30", "gray70"),
+        )
+
+        self.btn_shuffle = ctk.CTkButton(
+            btn_frame, text=self.ICON_SHUFFLE, command=self._on_toggle_shuffle, **mode_btn_cfg,
+        )
+        self.btn_shuffle.pack(side="left", padx=(0, 8))
 
         self.btn_prev = ctk.CTkButton(btn_frame, text=self.ICON_PREV, command=self._on_prev, **btn_cfg)
         self.btn_prev.pack(side="left", padx=4)
@@ -162,6 +185,11 @@ class AudioPlayerUI(ctk.CTk):
 
         self.btn_next = ctk.CTkButton(btn_frame, text=self.ICON_NEXT, command=self._on_next, **btn_cfg)
         self.btn_next.pack(side="left", padx=4)
+
+        self.btn_repeat = ctk.CTkButton(
+            btn_frame, text=self.ICON_REPEAT, command=self._on_cycle_repeat, **mode_btn_cfg,
+        )
+        self.btn_repeat.pack(side="left", padx=(8, 0))
 
         # Volume
         vol_frame = ctk.CTkFrame(frame, fg_color="transparent")
@@ -217,6 +245,18 @@ class AudioPlayerUI(ctk.CTk):
         )
         self.btn_add.grid(row=4, column=0, padx=16, pady=(4, 16), sticky="ew")
 
+    # ------------------------------------------------------------------
+    # Atalhos de teclado
+    # ------------------------------------------------------------------
+
+    def _bind_shortcuts(self) -> None:
+        """Espaço = play/pause, setas = seek, Ctrl+setas = faixa anterior/próxima."""
+        self.bind("<space>", lambda e: self._on_play_pause())
+        self.bind("<Left>", lambda e: self._on_seek_relative(-5))
+        self.bind("<Right>", lambda e: self._on_seek_relative(5))
+        self.bind("<Control-Left>", lambda e: self._on_prev())
+        self.bind("<Control-Right>", lambda e: self._on_next())
+
     # ==================================================================
     # Callbacks / Eventos
     # ==================================================================
@@ -254,10 +294,48 @@ class AudioPlayerUI(ctk.CTk):
         )
         lbl.grid(row=index, column=0, padx=4, pady=2, sticky="ew")
         lbl.bind("<Double-Button-1>", lambda e, idx=index: self._on_playlist_double_click(idx))
+        lbl.bind("<Button-3>", lambda e, idx=index: self._show_playlist_context_menu(e, idx))
         # Hover effect
         lbl.bind("<Enter>", lambda e, l=lbl: l.configure(fg_color=("gray80", "gray28")))
         lbl.bind("<Leave>", lambda e, l=lbl, idx=index: self._reset_label_color(l, idx))
         self._playlist_labels.append(lbl)
+
+    def _show_playlist_context_menu(self, event, index: int) -> None:
+        """Exibe menu de contexto (botão direito) com a opção de remover a faixa."""
+        menu = tk.Menu(self, tearoff=0)
+        menu.add_command(label="Remover da playlist", command=lambda: self._remove_from_playlist(index))
+        menu.tk_popup(event.x_root, event.y_root)
+
+    def _remove_from_playlist(self, index: int) -> None:
+        """Remove uma faixa da playlist pelo índice, ajustando o estado de reprodução."""
+        if not (0 <= index < len(self._playlist)):
+            return
+        removing_current = index == self._current_index
+        del self._playlist[index]
+        if removing_current:
+            self.player.stop()
+            self._current_index = -1
+            self._current_duration = 0.0
+            self._elapsed_offset = 0.0
+            self.lbl_title.configure(text="Nenhuma música selecionada")
+            self.lbl_artist.configure(text="")
+            self.lbl_album.configure(text="")
+            self.lbl_duration.configure(text="00:00")
+            self.lbl_elapsed.configure(text="00:00")
+            self.slider_progress.set(0)
+            self.btn_play.configure(text=self.ICON_PLAY)
+        elif index < self._current_index:
+            self._current_index -= 1
+        self._rebuild_playlist_ui()
+
+    def _rebuild_playlist_ui(self) -> None:
+        """Recria todos os labels da playlist (usado após remoção de faixas)."""
+        for lbl in self._playlist_labels:
+            lbl.destroy()
+        self._playlist_labels = []
+        for i, filepath in enumerate(self._playlist):
+            self._add_playlist_label(filepath, i)
+        self._highlight_current()
 
     def _reset_label_color(self, lbl: ctk.CTkLabel, index: int) -> None:
         """Restaura a cor do label (highlight se for a música atual)."""
@@ -276,29 +354,45 @@ class AudioPlayerUI(ctk.CTk):
 
     def _on_playlist_double_click(self, index: int) -> None:
         """Toca a música clicada na playlist."""
-        self._load_track(index)
+        if not self._load_track(index):
+            return
         self.player.play()
         self.btn_play.configure(text=self.ICON_PAUSE)
         self._highlight_current()
 
-    def _load_track(self, index: int) -> None:
-        """Carrega a faixa pelo índice da playlist."""
-        if 0 <= index < len(self._playlist):
-            self._current_index = index
-            filepath = self._playlist[index]
-            self.player.load(filepath)
-            self._elapsed_offset = 0.0
-            self._current_duration = AudioPlayer.get_duration(filepath)
+    def _load_track(self, index: int) -> bool:
+        """Carrega a faixa pelo índice da playlist.
 
-            # Atualizar informações
-            meta = AudioPlayer.get_metadata(filepath)
-            self.lbl_title.configure(text=meta["title"])
-            self.lbl_artist.configure(text=meta["artist"])
-            self.lbl_album.configure(text=meta["album"])
-            self.lbl_duration.configure(text=_format_time(self._current_duration))
-            self.slider_progress.set(0)
-            self.lbl_elapsed.configure(text="00:00")
-            self._highlight_current()
+        Retorna False (e remove a faixa da playlist) se o arquivo não existir
+        mais ou estiver corrompido/inválido, em vez de derrubar a aplicação.
+        """
+        if not (0 <= index < len(self._playlist)):
+            return False
+        filepath = self._playlist[index]
+        try:
+            self.player.load(filepath)
+        except (FileNotFoundError, pygame.error) as exc:
+            messagebox.showerror(
+                "Erro ao carregar música",
+                f"Não foi possível carregar o arquivo:\n{filepath}\n\n{exc}",
+            )
+            self._remove_from_playlist(index)
+            return False
+
+        self._current_index = index
+        self._elapsed_offset = 0.0
+        self._current_duration = AudioPlayer.get_duration(filepath)
+
+        # Atualizar informações
+        meta = AudioPlayer.get_metadata(filepath)
+        self.lbl_title.configure(text=meta["title"])
+        self.lbl_artist.configure(text=meta["artist"])
+        self.lbl_album.configure(text=meta["album"])
+        self.lbl_duration.configure(text=_format_time(self._current_duration))
+        self.slider_progress.set(0)
+        self.lbl_elapsed.configure(text="00:00")
+        self._highlight_current()
+        return True
 
     def _on_play_pause(self) -> None:
         """Alterna entre play e pause."""
@@ -314,7 +408,8 @@ class AudioPlayerUI(ctk.CTk):
             # Nada tocando — iniciar
             if self._current_index == -1:
                 self._current_index = 0
-                self._load_track(0)
+                if not self._load_track(0):
+                    return
             self.player.play()
             self.btn_play.configure(text=self.ICON_PAUSE)
 
@@ -326,12 +421,26 @@ class AudioPlayerUI(ctk.CTk):
         self.lbl_elapsed.configure(text="00:00")
         self._elapsed_offset = 0.0
 
+    def _next_index_manual(self) -> int:
+        """Índice da próxima faixa (aleatório se shuffle estiver ativo)."""
+        if self._shuffle and len(self._playlist) > 1:
+            choices = [i for i in range(len(self._playlist)) if i != self._current_index]
+            return random.choice(choices)
+        return (self._current_index + 1) % len(self._playlist)
+
+    def _prev_index_manual(self) -> int:
+        """Índice da faixa anterior (aleatório se shuffle estiver ativo)."""
+        if self._shuffle and len(self._playlist) > 1:
+            choices = [i for i in range(len(self._playlist)) if i != self._current_index]
+            return random.choice(choices)
+        return (self._current_index - 1) % len(self._playlist)
+
     def _on_prev(self) -> None:
         """Vai para a música anterior."""
         if not self._playlist:
             return
-        new_index = (self._current_index - 1) % len(self._playlist)
-        self._load_track(new_index)
+        if not self._load_track(self._prev_index_manual()):
+            return
         self.player.play()
         self.btn_play.configure(text=self.ICON_PAUSE)
 
@@ -339,14 +448,27 @@ class AudioPlayerUI(ctk.CTk):
         """Vai para a próxima música."""
         if not self._playlist:
             return
-        new_index = (self._current_index + 1) % len(self._playlist)
-        self._load_track(new_index)
+        if not self._load_track(self._next_index_manual()):
+            return
         self.player.play()
         self.btn_play.configure(text=self.ICON_PAUSE)
 
     def _on_volume_change(self, value: float) -> None:
         """Atualiza o volume."""
         self.player.set_volume(value)
+
+    def _on_toggle_shuffle(self) -> None:
+        """Ativa/desativa o modo aleatório."""
+        self._shuffle = not self._shuffle
+        self.btn_shuffle.configure(fg_color=self._ACTIVE_COLOR if self._shuffle else "transparent")
+
+    def _on_cycle_repeat(self) -> None:
+        """Alterna entre repetir desligado / playlist inteira / faixa atual."""
+        order = ["off", "all", "one"]
+        self._repeat_mode = order[(order.index(self._repeat_mode) + 1) % len(order)]
+        icon = self.ICON_REPEAT_ONE if self._repeat_mode == "one" else self.ICON_REPEAT
+        active = self._repeat_mode != "off"
+        self.btn_repeat.configure(text=icon, fg_color=self._ACTIVE_COLOR if active else "transparent")
 
     # ------------------------------------------------------------------
     # Barra de progresso — interação do usuário
@@ -368,6 +490,17 @@ class AudioPlayerUI(ctk.CTk):
             target = self.slider_progress.get() * self._current_duration
             self._elapsed_offset = target
             self.player.seek(target)
+
+    def _on_seek_relative(self, delta: float) -> None:
+        """Avança/retrocede a posição atual em `delta` segundos (atalhos de teclado)."""
+        if not self.player.current_file or self._current_duration <= 0:
+            return
+        current = self._elapsed_offset + self.player.get_position()
+        target = max(0.0, min(self._current_duration, current + delta))
+        self._elapsed_offset = target
+        self.player.seek(target)
+        self.slider_progress.set(target / self._current_duration)
+        self.lbl_elapsed.configure(text=_format_time(target))
 
     # ==================================================================
     # Loop de atualização
@@ -392,36 +525,84 @@ class AudioPlayerUI(ctk.CTk):
 
     def _check_music_end(self) -> None:
         """Verifica se a música terminou para auto-avançar na playlist."""
-        # pygame.event não funciona bem sem display, então checamos via mixer
-        if (self.player._playing and not self.player._paused
-                and not self.player.is_playing()
-                and not self._seeking):
-            # A música pode ter terminado — verificar se get_pos retorna -1
-            raw_pos = self.player.get_position()
-            # get_position retorna 0 quando parado; mixer.music.get_busy() é mais confiável
-            import pygame
-            if not pygame.mixer.music.get_busy():
-                self._auto_next()
+        if not self._seeking and self.player.has_finished():
+            self._auto_next()
         self.after(500, self._check_music_end)
 
     def _auto_next(self) -> None:
-        """Avança automaticamente para a próxima música."""
+        """Avança automaticamente para a próxima música (respeitando repeat/shuffle)."""
+        if self._repeat_mode == "one":
+            if self._load_track(self._current_index):
+                self.player.play()
+                self.btn_play.configure(text=self.ICON_PAUSE)
+            return
+        if self._shuffle and len(self._playlist) > 1:
+            if self._load_track(self._next_index_manual()):
+                self.player.play()
+                self.btn_play.configure(text=self.ICON_PAUSE)
+            return
         if self._current_index < len(self._playlist) - 1:
             self._on_next()
+        elif self._repeat_mode == "all" and self._playlist:
+            if self._load_track(0):
+                self.player.play()
+                self.btn_play.configure(text=self.ICON_PAUSE)
         else:
             # Fim da playlist — parar
             self.player.stop()
-            self.player._playing = False
             self.btn_play.configure(text=self.ICON_PLAY)
             self.slider_progress.set(0)
             self.lbl_elapsed.configure(text="00:00")
             self._elapsed_offset = 0.0
 
     # ==================================================================
+    # Persistência entre sessões
+    # ==================================================================
+
+    def _load_saved_state(self) -> None:
+        """Restaura playlist, faixa atual e volume salvos na sessão anterior."""
+        if not os.path.isfile(CONFIG_FILE):
+            return
+        try:
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+            return
+
+        volume = data.get("volume")
+        if isinstance(volume, (int, float)):
+            volume = max(0.0, min(1.0, float(volume)))
+            self.slider_volume.set(volume)
+            self.player.set_volume(volume)
+
+        for filepath in data.get("playlist", []):
+            if isinstance(filepath, str) and os.path.isfile(filepath) and filepath not in self._playlist:
+                self._playlist.append(filepath)
+                self._add_playlist_label(filepath, len(self._playlist) - 1)
+
+        last_index = data.get("current_index", -1)
+        if isinstance(last_index, int) and 0 <= last_index < len(self._playlist):
+            self._load_track(last_index)
+
+    def _save_state(self) -> None:
+        """Salva playlist, faixa atual e volume para a próxima sessão."""
+        data = {
+            "playlist": self._playlist,
+            "current_index": self._current_index,
+            "volume": self.slider_volume.get(),
+        }
+        try:
+            with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        except OSError:
+            pass
+
+    # ==================================================================
     # Cleanup
     # ==================================================================
 
     def on_closing(self) -> None:
-        """Libera recursos ao fechar a janela."""
+        """Salva o estado e libera recursos ao fechar a janela."""
+        self._save_state()
         self.player.cleanup()
         self.destroy()

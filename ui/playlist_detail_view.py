@@ -10,7 +10,7 @@ from player import AudioPlayer
 
 from . import dialogs, theme
 from .tooltip import add_tooltip
-from .utils import format_time
+from .utils import add_settings_button, format_time
 
 _COVER_SIZE = 110
 _THUMB_SIZE = 40
@@ -110,6 +110,7 @@ class PlaylistDetailView(ctk.CTkFrame):
         self._build_header()
         self._build_order_row()
         self._build_tracks_section()
+        add_settings_button(self, self.app)
 
     # ------------------------------------------------------------------
     # Construção da UI

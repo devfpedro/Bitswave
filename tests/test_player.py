@@ -48,6 +48,22 @@ def test_get_metadata_defaults_to_filename(tmp_path):
     assert meta["album"] == "Álbum desconhecido"
 
 
+def test_get_metadata_strips_bom_from_tags(tmp_path):
+    """Regressão: alguns encoders prefixam as tags ID3v2 com um BOM (\\ufeff)."""
+    from mutagen.id3 import ID3, TIT2, TPE1
+
+    filepath = tmp_path / "tagged.mp3"
+    filepath.write_bytes(b"")
+    tags = ID3()
+    tags.add(TIT2(encoding=3, text=["﻿Tagged Title"]))
+    tags.add(TPE1(encoding=3, text=["﻿Tagged Artist"]))
+    tags.save(str(filepath))
+
+    meta = AudioPlayer.get_metadata(str(filepath))
+    assert meta["title"] == "Tagged Title"
+    assert meta["artist"] == "Tagged Artist"
+
+
 def test_play_pause_stop_state_machine(player, silent_wav):
     player.load(silent_wav)
     assert player.current_file == silent_wav

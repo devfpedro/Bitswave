@@ -5,12 +5,14 @@ import tkinter as tk
 import customtkinter as ctk
 
 from db import PlaylistDB
+from folder_watch import FolderWatcher, default_watch_folders
 from player import AudioPlayer
 
 from . import theme
 from .playback_view import PlaybackView
 from .playlist_detail_view import PlaylistDetailView
 from .playlist_selection_view import PlaylistSelectionView
+from .shortcuts_view import ShortcutsView
 
 ICON_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models", "iconApp.png"
@@ -28,10 +30,9 @@ class App(ctk.CTk):
 
         self.player = player if player is not None else AudioPlayer()
         self.db = db if db is not None else PlaylistDB()
+        self.folder_watcher = FolderWatcher(default_watch_folders())
 
-        # Título vazio: a barra de título mostra só o ícone (definido em _set_window_icon),
-        # sem o nome do app ao lado. O identificador interno da janela continua "Bitswave".
-        self.title("")
+        self.title("Bitswave")
         self.wm_iconname("Bitswave")
         self.geometry("400x640")
         self.minsize(360, 580)
@@ -44,9 +45,15 @@ class App(ctk.CTk):
         self.playback_view = PlaybackView(self, self)
         self.playlist_selection_view = PlaylistSelectionView(self, self)
         self.playlist_detail_view = PlaylistDetailView(self, self)
+        self.shortcuts_view = ShortcutsView(self, self)
 
-        for view in (self.playback_view, self.playlist_selection_view, self.playlist_detail_view):
+        for view in (
+            self.playback_view, self.playlist_selection_view,
+            self.playlist_detail_view, self.shortcuts_view,
+        ):
             view.grid(row=0, column=0, sticky="nsew")
+
+        self._active_show = self.show_playback
 
         self._bind_shortcuts()
         self.playback_view.load_state()
@@ -78,16 +85,27 @@ class App(ctk.CTk):
     # ------------------------------------------------------------------
 
     def show_playback(self) -> None:
+        self._active_show = self.show_playback
         self.playback_view.on_show()
         self.playback_view.tkraise()
 
     def show_playlist_selection(self) -> None:
+        self._active_show = self.show_playlist_selection
         self.playlist_selection_view.on_show()
         self.playlist_selection_view.tkraise()
 
     def show_playlist_detail(self, playlist_id: int) -> None:
+        self._active_show = lambda: self.show_playlist_detail(playlist_id)
         self.playlist_detail_view.on_show(playlist_id)
         self.playlist_detail_view.tkraise()
+
+    def show_shortcuts(self) -> None:
+        """Abre a tela de atalhos, lembrando de qual tela veio para o botão voltar."""
+        self.shortcuts_view.on_show()
+        self.shortcuts_view.tkraise()
+
+    def go_back_from_shortcuts(self) -> None:
+        self._active_show()
 
     def play_queue(self, filepaths: list[str], start_index: int = 0, shuffle: bool = False) -> None:
         """Carrega uma fila de faixas no player e muda para a tela de reprodução."""

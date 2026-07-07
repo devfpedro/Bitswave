@@ -4,6 +4,11 @@ from mutagen.mp3 import MP3
 from mutagen.id3 import ID3, ID3NoHeaderError
 
 
+def _clean_tag_text(text: str) -> str:
+    """Remove BOM e espaços que alguns encoders deixam nas tags ID3v2."""
+    return text.replace("﻿", "").strip()
+
+
 class AudioPlayer:
     """Gerencia a reprodução de arquivos MP3 usando pygame.mixer."""
 
@@ -148,11 +153,11 @@ class AudioPlayer:
         try:
             tags = ID3(filepath)
             if tags.get("TIT2"):
-                metadata["title"] = str(tags["TIT2"])
+                metadata["title"] = _clean_tag_text(str(tags["TIT2"]))
             if tags.get("TPE1"):
-                metadata["artist"] = str(tags["TPE1"])
+                metadata["artist"] = _clean_tag_text(str(tags["TPE1"]))
             if tags.get("TALB"):
-                metadata["album"] = str(tags["TALB"])
+                metadata["album"] = _clean_tag_text(str(tags["TALB"]))
         except ID3NoHeaderError:
             pass
         except Exception:

@@ -10,6 +10,7 @@ from player import AudioPlayer
 
 from . import dialogs, theme
 from .tooltip import add_tooltip
+from .utils import add_settings_button
 
 _COLUMNS = 2
 _COVER_SIZE = 130
@@ -100,6 +101,7 @@ class PlaylistSelectionView(ctk.CTkFrame):
         self._build_topbar()
         self._build_create_button()
         self._build_grid()
+        add_settings_button(self, self.app)
 
     def _build_topbar(self) -> None:
         bar = ctk.CTkFrame(self, fg_color="transparent")

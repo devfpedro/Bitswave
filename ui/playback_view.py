@@ -10,8 +10,9 @@ import pygame
 from player import AudioPlayer
 
 from . import theme
+from .recent_files_panel import RecentFilesPanel
 from .tooltip import add_tooltip
-from .utils import format_time as _format_time
+from .utils import add_settings_button, format_time as _format_time
 from .waveform import WaveformCanvas
 
 CONFIG_FILE = os.path.join(
@@ -47,14 +48,17 @@ class PlaybackView(ctk.CTkFrame):
         self._repeat_mode: str = "off"
 
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(5, weight=1)
+        self.grid_rowconfigure(6, weight=1)
 
         self._build_topbar()
         self._build_waveform()
         self._build_info()
         self._build_progress()
         self._build_controls()
-        ctk.CTkFrame(self, fg_color="transparent").grid(row=5, column=0, sticky="nsew")
+        self.recent_files_panel = RecentFilesPanel(self, self.app)
+        self.recent_files_panel.grid(row=5, column=0, sticky="ew", padx=16, pady=(0, 4))
+        ctk.CTkFrame(self, fg_color="transparent").grid(row=6, column=0, sticky="nsew")
+        add_settings_button(self, self.app)
 
         self._start_update_loop()
 
@@ -205,11 +209,12 @@ class PlaybackView(ctk.CTkFrame):
             self.waveform.set_playing(True)
 
     def save_state(self) -> None:
-        """Salva a fila atual, índice e volume para a próxima sessão."""
+        """Salva a fila atual, índice, volume e pastas monitoradas para a próxima sessão."""
         data = {
             "queue": self._queue,
             "index": self._index,
             "volume": self.slider_volume.get(),
+            "watch_folders": self.app.folder_watcher.folders,
         }
         try:
             with open(CONFIG_FILE, "w", encoding="utf-8") as f:
@@ -218,7 +223,7 @@ class PlaybackView(ctk.CTkFrame):
             pass
 
     def load_state(self) -> None:
-        """Restaura a última fila tocada, se existir."""
+        """Restaura a última fila tocada e as pastas monitoradas, se existirem."""
         if not os.path.isfile(CONFIG_FILE):
             return
         try:
@@ -232,6 +237,12 @@ class PlaybackView(ctk.CTkFrame):
             volume = max(0.0, min(1.0, float(volume)))
             self.slider_volume.set(volume)
             self._on_volume_change(volume)
+
+        watch_folders = data.get("watch_folders")
+        if isinstance(watch_folders, list):
+            valid = [f for f in watch_folders if isinstance(f, str) and os.path.isdir(f)]
+            if valid:
+                self.app.folder_watcher.folders = valid
 
         queue = [f for f in data.get("queue", []) if isinstance(f, str) and os.path.isfile(f)]
         if not queue:

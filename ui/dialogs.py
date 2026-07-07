@@ -1,4 +1,6 @@
 """Diálogos modais reutilizáveis (criar/editar playlist, confirmação)."""
+from tkinter import filedialog
+
 import customtkinter as ctk
 
 from . import theme
@@ -158,4 +160,74 @@ def confirm(parent, title: str, message: str, danger: bool = False) -> bool:
         command=on_confirm,
     ).pack(side="right")
 
+    return dialog.run()
+
+
+def manage_folders_dialog(parent, folders: list[str]) -> list[str] | None:
+    """Diálogo para gerenciar as pastas monitoradas para adição automática de músicas.
+
+    Retorna a lista atualizada de pastas ao salvar, ou None se cancelado.
+    """
+    dialog = _ModalDialog(parent, "Pastas Monitoradas")
+    dialog.geometry("420x380")
+    current = list(folders)
+
+    ctk.CTkLabel(
+        dialog, text="Pastas Monitoradas", font=ctk.CTkFont(size=16, weight="bold"),
+        text_color=theme.TEXT_PRIMARY,
+    ).pack(padx=20, pady=(20, 4), anchor="w")
+    ctk.CTkLabel(
+        dialog,
+        text='Novos arquivos de áudio nessas pastas aparecem automaticamente em "Adicionadas recentemente".',
+        font=ctk.CTkFont(size=11), text_color=theme.TEXT_SECONDARY, wraplength=380, justify="left",
+    ).pack(padx=20, pady=(0, 10), anchor="w")
+
+    list_frame = ctk.CTkScrollableFrame(dialog, fg_color=theme.CARD_BG, height=160)
+    list_frame.pack(fill="both", expand=True, padx=20, pady=(0, 8))
+    list_frame.grid_columnconfigure(0, weight=1)
+
+    def _remove(folder: str) -> None:
+        current.remove(folder)
+        _render_rows()
+
+    def _render_rows() -> None:
+        for widget in list_frame.winfo_children():
+            widget.destroy()
+        if not current:
+            ctk.CTkLabel(
+                list_frame, text="Nenhuma pasta monitorada.", font=ctk.CTkFont(size=12),
+                text_color=theme.TEXT_SECONDARY,
+            ).grid(row=0, column=0, pady=16)
+            return
+        for i, folder in enumerate(current):
+            row = ctk.CTkFrame(list_frame, fg_color="transparent")
+            row.grid(row=i, column=0, sticky="ew", pady=2)
+            row.grid_columnconfigure(0, weight=1)
+            ctk.CTkLabel(
+                row, text=folder, font=ctk.CTkFont(size=12), text_color=theme.TEXT_PRIMARY, anchor="w",
+            ).grid(row=0, column=0, sticky="ew", padx=(4, 8))
+            ctk.CTkButton(
+                row, text="✕", width=26, height=26, corner_radius=13,
+                fg_color="transparent", hover_color=theme.CARD_BG_HOVER, text_color=theme.DANGER,
+                font=ctk.CTkFont(size=12), command=lambda f=folder: _remove(f),
+            ).grid(row=0, column=1)
+
+    def _add_folder() -> None:
+        chosen = filedialog.askdirectory(title="Selecionar pasta para monitorar", parent=dialog)
+        if chosen and chosen not in current:
+            current.append(chosen)
+            _render_rows()
+
+    ctk.CTkButton(
+        dialog, text="＋ Adicionar Pasta", height=34, corner_radius=17,
+        fg_color=theme.CARD_BG, hover_color=theme.CARD_BG_HOVER, text_color=theme.TEXT_PRIMARY,
+        font=ctk.CTkFont(size=12), command=_add_folder,
+    ).pack(padx=20, pady=(0, 8), anchor="w")
+
+    def on_ok() -> None:
+        dialog.result = list(current)
+        dialog.destroy()
+
+    _render_rows()
+    _build_button_row(dialog, on_ok, "Salvar")
     return dialog.run()

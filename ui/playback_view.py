@@ -159,9 +159,9 @@ class PlaybackView(ctk.CTkFrame):
         icons.apply_icon(self.btn_shuffle, "shuffle", theme.TEXT_SECONDARY, theme.TEXT_PRIMARY)
         add_tooltip(self.btn_shuffle, "Aleatório")
 
-        self.btn_repeat = ctk.CTkButton(mode_row, text=self.ICON_REPEAT, command=self._on_cycle_repeat, **mode_cfg)
+        self.btn_repeat = ctk.CTkButton(mode_row, text=self.ICON_REPEAT, command=self._on_toggle_repeat, **mode_cfg)
         self.btn_repeat.pack(side="left", padx=10)
-        add_tooltip(self.btn_repeat, "Repetir")
+        add_tooltip(self.btn_repeat, "Repetir faixa atual")
         self._img_repeat = icons.get("repeat", 18, theme.TEXT_SECONDARY)
         self._img_repeat_one = icons.get("repeat_one", 18, theme.TEXT_SECONDARY)
         self._set_repeat_icon()
@@ -489,9 +489,13 @@ class PlaybackView(ctk.CTkFrame):
         self._shuffle = not self._shuffle
         self.btn_shuffle.configure(fg_color=theme.ACCENT_ACTIVE if self._shuffle else "transparent")
 
-    def _on_cycle_repeat(self) -> None:
-        order = ["off", "all", "one"]
-        self._repeat_mode = order[(order.index(self._repeat_mode) + 1) % len(order)]
+    def _on_toggle_repeat(self) -> None:
+        """Liga/desliga a repetição da faixa atual (loop ininterrupto até desativar).
+
+        Alterna apenas entre "off" e "one": ao final da faixa, se ativo, ela recomeça
+        do zero indefinidamente (ver _auto_next), independente de haver ou não playlist.
+        """
+        self._repeat_mode = "one" if self._repeat_mode == "off" else "off"
         self._set_repeat_icon()
 
     def _set_play_icon(self, playing: bool) -> None:
@@ -504,13 +508,12 @@ class PlaybackView(ctk.CTkFrame):
 
     def _set_repeat_icon(self) -> None:
         """Atualiza o ícone/realce do botão de repetição conforme o modo atual."""
-        active = self._repeat_mode != "off"
-        img = self._img_repeat_one if self._repeat_mode == "one" else self._img_repeat
+        active = self._repeat_mode == "one"
+        img = self._img_repeat_one if active else self._img_repeat
         if img is not None:
             self.btn_repeat.configure(image=img, text="")
         else:
-            text = self.ICON_REPEAT_ONE if self._repeat_mode == "one" else self.ICON_REPEAT
-            self.btn_repeat.configure(text=text)
+            self.btn_repeat.configure(text=self.ICON_REPEAT_ONE if active else self.ICON_REPEAT)
         self.btn_repeat.configure(fg_color=theme.ACCENT_ACTIVE if active else "transparent")
 
     # ------------------------------------------------------------------
@@ -583,11 +586,6 @@ class PlaybackView(ctk.CTkFrame):
             return
         if self._index < len(self._queue) - 1:
             self._on_next()
-        elif self._repeat_mode == "all" and self._queue:
-            if self._load_track(0):
-                self.player.play()
-                self._set_play_icon(True)
-                self.waveform.set_playing(True)
         else:
             self.player.stop()
             self._set_play_icon(False)

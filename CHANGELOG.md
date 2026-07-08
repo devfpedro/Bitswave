@@ -11,6 +11,9 @@ e o projeto adota [Versionamento Semântico](https://semver.org/lang/pt-BR/).
   (`build_appimage.sh`), entrada `.desktop` e ícone. Gera um `Bitswave-x86_64.AppImage`
   executável por duplo-clique, com ícone e menu, sem instalação nem root. Descoberta de
   pastas Downloads/Músicas agora é multiplataforma (`xdg-user-dir` no Linux).
+- **CI de build Linux** (`.github/workflows/build-linux.yml`): constrói o AppImage num
+  Ubuntu fixo (glibc estável), faz smoke test sob display virtual (xvfb) e anexa o
+  binário ao Release ao publicá-lo. Roda também sob demanda (workflow_dispatch).
 - **Playlist temporária por seleção múltipla** (T7): o botão "＋" agora aceita vários
   arquivos de uma vez e os reproduz em sequência como uma playlist não salva, sem limite
   de faixas. Uma nova seleção — ou iniciar uma playlist salva — descarta a fila anterior.

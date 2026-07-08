@@ -10,13 +10,29 @@ duplo-clique, com ícone e entrada de menu, sem instalação nem privilégios de
 
 ## Construir
 
-Executar **em Linux x86_64** (o script não roda no Windows):
+### Opção A — GitHub Actions (recomendado)
+
+O binário Linux é construído automaticamente por CI, num ambiente Ubuntu limpo e
+reprodutível (`.github/workflows/build-linux.yml`). É a boa prática: nada precisa ser
+instalado na sua máquina, o runner é fixado em `ubuntu-22.04` (glibc 2.35) para
+compatibilidade ampla, e o AppImage ainda passa por um smoke test sob display virtual.
+
+- **Ao publicar um Release** (tag `v*`): o `.AppImage` é anexado ao próprio Release.
+- **Manualmente:** aba *Actions* → *Build Linux AppImage* → *Run workflow* → baixe o
+  artefato `Bitswave-linux-appimage`.
+
+### Opção B — Localmente (em Linux x86_64)
+
+Útil para testar/depurar. O script **não roda no Windows**:
 
 ```bash
 bash packaging/linux/build_appimage.sh
 ```
 
 Saída: `dist/Bitswave-x86_64.AppImage`.
+
+> Atenção: um AppImage construído numa distro *mais nova* pode não rodar em sistemas
+> *mais antigos* (glibc). Se for distribuir amplamente, prefira a Opção A (runner fixo).
 
 ### Requisitos do sistema (na máquina que constrói)
 
@@ -36,6 +52,15 @@ sudo apt install python3 python3-venv python3-tk wget
 ```bash
 chmod +x dist/Bitswave-x86_64.AppImage
 ./dist/Bitswave-x86_64.AppImage
+```
+
+Em distros baseadas em Ubuntu 22.04+ (como o **Zorin OS 17**), o runtime clássico de
+AppImage depende do `libfuse2`, que não vem instalado por padrão. Se aparecer um erro de
+FUSE, instale-o **ou** rode com extração automática:
+
+```bash
+sudo apt install libfuse2          # opção 1
+./dist/Bitswave-x86_64.AppImage --appimage-extract-and-run   # opção 2 (sem instalar nada)
 ```
 
 Para integrar ao menu de aplicativos, use uma ferramenta como o

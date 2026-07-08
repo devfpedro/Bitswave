@@ -1,0 +1,67 @@
+name: Build Linux AppImage
+
+# Boa prática: o binário Linux é construído num ambiente limpo e reprodutível,
+# não na máquina de ninguém. O runner é FIXADO em ubuntu-22.04 (glibc 2.35) para
+# maximizar a compatibilidade do AppImage com distros mais antigas -- construir
+# num Ubuntu mais novo geraria um AppImage que não roda em sistemas anteriores.
+on:
+  release:
+    types: [published]   # ao publicar um Release, anexa o .AppImage a ele
+  workflow_dispatch:      # botão "Run workflow" para builds manuais/de teste
+
+permissions:
+  contents: write         # necessário para anexar o asset ao Release
+
+jobs:
+  appimage:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      # numpy==2.5.1 exige Python >=3.11; o Python do sistema no 22.04 é 3.10.
+      # setup-python 3.12 satisfaz as deps e traz tkinter embutido (checado abaixo).
+      - name: Configurar Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verificar tkinter (falha rápido se ausente)
+        run: python -c "import tkinter; print('tkinter OK', tkinter.TkVersion)"
+
+      - name: Dependências de sistema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget xvfb
+
+      - name: Construir o AppImage
+        run: bash packaging/linux/build_appimage.sh
+
+      # Smoke test real: inicia o app sob display virtual (xvfb) e áudio dummy.
+      # O app não sai sozinho, então usamos timeout: exit 124 = rodou até o fim do
+      # tempo (sucesso); qualquer outro código = crashou na inicialização (falha).
+      - name: Smoke test do AppImage (xvfb)
+        run: |
+          set +e
+          xvfb-run -a env SDL_AUDIODRIVER=dummy \
+            timeout 20 ./dist/Bitswave-x86_64.AppImage --appimage-extract-and-run
+          code=$?
+          if [ "$code" -eq 124 ]; then
+            echo "Smoke OK: o AppImage iniciou e rodou por 20s sem crashar."
+          else
+            echo "Smoke FALHOU: o AppImage saiu com código $code na inicialização."
+            exit 1
+          fi
+
+      - name: Publicar como artefato do workflow (download avulso)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Bitswave-linux-appimage
+          path: dist/Bitswave-x86_64.AppImage
+          if-no-files-found: error
+
+      - name: Anexar o AppImage ao Release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ github.event.release.tag_name }}" dist/Bitswave-x86_64.AppImage --clobber

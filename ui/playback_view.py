@@ -552,6 +552,7 @@ class PlaybackView(ctk.CTkFrame):
 
     def _start_update_loop(self) -> None:
         self._update_progress()
+        self._update_spectrum()
         self._check_music_end()
 
     def _update_progress(self) -> None:
@@ -563,8 +564,22 @@ class PlaybackView(ctk.CTkFrame):
             fraction = pos_sec / self._current_duration
             self.slider_progress.set(fraction)
             self.lbl_elapsed.configure(text=_format_time(pos_sec))
-            self.waveform.set_position(pos_sec)
         self.after(200, self._update_progress)
+
+    def _update_spectrum(self) -> None:
+        """Sincroniza a posição do espectro numa cadência alta (~20 fps), separada do
+        loop de progresso de 200 ms.
+
+        O espectro é pré-calculado em quadros de ~80 ms; amostrar a posição só a cada
+        200 ms (junto do slider/labels) fazia as barras avançarem em degraus de ~5 fps,
+        com aparência de travamento/dessincronia. Este tick dedicado atualiza apenas a
+        posição consultada pelo WaveformCanvas -- sem redesenhar slider ou textos, que
+        não precisam dessa frequência.
+        """
+        if self.player.is_playing() and not self._seeking and self._current_duration > 0:
+            pos_sec = min(self._elapsed_offset + self.player.get_position(), self._current_duration)
+            self.waveform.set_position(pos_sec)
+        self.after(50, self._update_spectrum)
 
     def _check_music_end(self) -> None:
         if not self._seeking and self.player.has_finished():

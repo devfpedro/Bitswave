@@ -97,8 +97,15 @@ class WaveformCanvas(tk.Canvas):
         self.create_oval(x0, y1 - 2 * r, x1, y1, outline="", width=0, **kwargs)
         self.create_rectangle(x0, y0 + r, x1, y1 - r, outline="", width=0, **kwargs)
 
+    # Redesenho a ~20 fps: sincronizado com o tick de posição de 50 ms do
+    # PlaybackView, elimina os degraus de ~5 fps que davam sensação de travamento.
+    _REDRAW_MS = 50
+
     def _animate(self) -> None:
         if self._playing:
-            self._phase += 0.35
+            # incremento da fase escalado pelo intervalo, para a animação decorativa
+            # (usada enquanto o espectro real ainda é calculado) manter a mesma
+            # velocidade visual de antes, independente da taxa de redesenho.
+            self._phase += 0.35 * (self._REDRAW_MS / 80.0)
         self._redraw()
-        self.after(80, self._animate)
+        self.after(self._REDRAW_MS, self._animate)

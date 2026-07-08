@@ -101,3 +101,43 @@ def test_no_repeat_stops_at_end_of_queue():
     PlaybackView._auto_next(s)
     s._on_next.assert_not_called()
     s.player.stop.assert_called_once()
+
+
+def _spectrum_stub(playing, seeking, duration, offset, position):
+    s = types.SimpleNamespace()
+    s.player = mock.Mock()
+    s.player.is_playing.return_value = playing
+    s.player.get_position.return_value = position
+    s._seeking = seeking
+    s._current_duration = duration
+    s._elapsed_offset = offset
+    s.waveform = mock.Mock()
+    s.after = mock.Mock()
+    s._update_spectrum = mock.Mock()  # referenciado no reagendamento self.after(...)
+    return s
+
+
+def test_spectrum_position_fed_at_high_rate_when_playing():
+    """T1: a posição do espectro é alimentada e reagendada a 50 ms (não a 200 ms)."""
+    s = _spectrum_stub(playing=True, seeking=False, duration=100.0, offset=10.0, position=3.0)
+    PlaybackView._update_spectrum(s)
+    s.waveform.set_position.assert_called_once_with(13.0)
+    assert s.after.call_args.args[0] == 50  # cadência alta, desacoplada do loop de 200 ms
+
+
+def test_spectrum_position_clamped_to_duration():
+    """A posição nunca ultrapassa a duração da faixa (evita indexar quadro inexistente)."""
+    s = _spectrum_stub(playing=True, seeking=False, duration=5.0, offset=4.0, position=10.0)
+    PlaybackView._update_spectrum(s)
+    s.waveform.set_position.assert_called_once_with(5.0)
+
+
+def test_spectrum_position_not_fed_when_paused_or_seeking():
+    """Pausado ou arrastando o slider: não empurra posição (barras ficam paradas/estáveis)."""
+    paused = _spectrum_stub(playing=False, seeking=False, duration=100.0, offset=0.0, position=1.0)
+    PlaybackView._update_spectrum(paused)
+    paused.waveform.set_position.assert_not_called()
+
+    seeking = _spectrum_stub(playing=True, seeking=True, duration=100.0, offset=0.0, position=1.0)
+    PlaybackView._update_spectrum(seeking)
+    seeking.waveform.set_position.assert_not_called()

@@ -98,6 +98,9 @@ class RecentFilesPanel(ctk.CTkFrame):
         if updated is None:
             return
         self.app.folder_watcher.folders = updated
+        # Persiste na hora: a preferência (inclusive uma lista esvaziada) precisa sobreviver
+        # mesmo que o app seja encerrado sem o fechamento limpo que dispara save_state().
+        self.app.playback_view.save_state()
         self._last_scan = []
         self._render_rows()
 

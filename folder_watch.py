@@ -57,6 +57,23 @@ def default_watch_folders() -> list[str]:
     return folders
 
 
+def resolve_saved_folders(config: dict, defaults: list[str]) -> list[str]:
+    """Decide as pastas monitoradas a partir da configuração salva.
+
+    Regra: a adição automática de Downloads/Músicas só vale enquanto o usuário
+    nunca configurou nada. A chave ``watch_folders`` no config é criada assim que
+    ele abre/salva o gerenciador de pastas; a partir daí ela é a preferência
+    explícita e vence -- **inclusive quando vazia** (o usuário removeu todas).
+    É essa distinção entre "chave ausente" e "lista vazia" que impede as pastas
+    removidas de reaparecerem sozinhas. Caminhos que não existem mais são
+    descartados para não sujar a lista.
+    """
+    saved = config.get("watch_folders")
+    if isinstance(saved, list):
+        return [f for f in saved if isinstance(f, str) and os.path.isdir(f)]
+    return list(defaults)
+
+
 class FolderWatcher:
     """Mantém uma lista de pastas e varre-as por arquivos de áudio (não recursivo)."""
 

@@ -10,6 +10,7 @@ import customtkinter as ctk
 import pygame
 
 import audio_spectrum
+from folder_watch import resolve_saved_folders
 from paths import data_path
 from player import AudioPlayer
 
@@ -275,11 +276,11 @@ class PlaybackView(ctk.CTkFrame):
             self.slider_volume.set(volume)
             self._on_volume_change(volume)
 
-        watch_folders = data.get("watch_folders")
-        if isinstance(watch_folders, list):
-            valid = [f for f in watch_folders if isinstance(f, str) and os.path.isdir(f)]
-            if valid:
-                self.app.folder_watcher.folders = valid
+        # Respeita a preferência salva de pastas -- inclusive uma lista esvaziada --
+        # em vez de recair nas pastas padrão (ver resolve_saved_folders).
+        self.app.folder_watcher.folders = resolve_saved_folders(
+            data, self.app.folder_watcher.folders
+        )
 
         queue = [f for f in data.get("queue", []) if isinstance(f, str) and os.path.isfile(f)]
         if not queue:

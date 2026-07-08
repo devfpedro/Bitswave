@@ -4,6 +4,19 @@ Todas as mudanças notáveis do Bitswave são documentadas aqui.
 O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/)
 e o projeto adota [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [1.0.2] - 2026-07-08
+
+### Fixed
+- **Crash ao abrir o AppImage no Linux** (`sqlite3.OperationalError: unable to open
+  database file`): `data_path()` resolvia dados persistentes (banco de playlists,
+  config) para a pasta do executável, que no AppImage é um mount squashfs
+  somente-leitura (ou uma pasta de extração temporária recriada a cada execução).
+  Agora usa o diretório de dados do usuário específico da plataforma —
+  `%LOCALAPPDATA%\Bitswave` no Windows, `$XDG_DATA_HOME/Bitswave` (ou
+  `~/.local/share/Bitswave`) no Linux — o que também protege o Windows do mesmo
+  tipo de falha em diretórios sem permissão de escrita (ex.: Program Files sem
+  elevação).
+
 ## [1.0.1] - 2026-07-08
 
 ### Added

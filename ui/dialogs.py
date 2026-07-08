@@ -4,6 +4,7 @@ from tkinter import filedialog
 import customtkinter as ctk
 
 from . import icons, theme
+from .tooltip import add_tooltip
 from .utils import ellipsize
 
 
@@ -214,6 +215,7 @@ def manage_folders_dialog(parent, folders: list[str]) -> list[str] | None:
                 font=ctk.CTkFont(size=12), command=lambda f=folder: _remove(f),
             )
             icons.apply_icon(remove_btn, "remove", theme.DANGER, theme.DANGER_HOVER, size=16)
+            add_tooltip(remove_btn, "Remover esta pasta da busca automática de músicas recentes")
             remove_btn.grid(row=0, column=1)
 
     def _add_folder() -> None:

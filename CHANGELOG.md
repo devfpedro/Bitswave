@@ -4,6 +4,22 @@ Todas as mudanças notáveis do Bitswave são documentadas aqui.
 O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/)
 e o projeto adota [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [1.0.3] - 2026-07-08
+
+### Fixed
+- **Múltiplas instâncias simultâneas** (Windows e Linux): era possível abrir o Bitswave
+  várias vezes, com janelas concorrentes disputando o mesmo banco SQLite e o mesmo
+  `player_config.json` (gravado no fechamento — a última instância a fechar sobrescrevia
+  as outras). Agora um *advisory lock* do SO (`fcntl.flock` no Linux, `msvcrt.locking` no
+  Windows) garante instância única; abrir uma segunda vez apenas avisa "O Bitswave já está
+  em execução" e encerra. O lock é liberado automaticamente pelo SO ao fim do processo,
+  sem sobrar arquivo preso após um crash.
+
+### Docs
+- README com passo a passo de execução no Linux, incluindo como marcar o AppImage como
+  executável (via terminal com `chmod +x` e pelo gerenciador de arquivos) e a nota de
+  `libfuse2`.
+
 ## [1.0.2] - 2026-07-08
 
 ### Fixed

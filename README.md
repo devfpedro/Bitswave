@@ -106,8 +106,46 @@ assets de `models/icons/` e da `customtkinter`).
 ### Linux (AppImage)
 
 No Linux, o Bitswave é distribuído como **AppImage** — um único arquivo que roda por
-duplo-clique, com ícone e entrada de menu, sem instalação nem root. Para construir
-(em Linux x86_64):
+duplo-clique, sem instalação nem root. Baixe o `Bitswave-x86_64.AppImage` na aba
+[Releases](https://github.com/devfpedro/Bitswave/releases).
+
+#### Passo a passo para executar
+
+**1. Marcar o arquivo como executável.** Navegadores removem a permissão de execução dos
+downloads por segurança, então o arquivo chega como um dado comum e não roda ao ser clicado.
+É preciso habilitá-la — de uma das duas formas:
+
+- **Pelo terminal:**
+  ```bash
+  cd ~/Downloads          # ou a pasta onde você baixou
+  chmod +x Bitswave-x86_64.AppImage
+  ```
+
+- **Pelo gerenciador de arquivos (visual):** clique com o botão direito no arquivo →
+  **Propriedades** → aba **Permissões** → marque **"Permitir execução do arquivo como
+  programa"** (em português; em inglês, *"Allow executing file as program"* / *"Executable
+  as Program"*). Feche a janela.
+
+**2. Executar:**
+
+- **Pelo terminal:**
+  ```bash
+  ./Bitswave-x86_64.AppImage
+  ```
+- **Visual:** dê um duplo-clique no arquivo (após o passo 1, o sistema pergunta se deseja
+  executar — confirme).
+
+> **Se aparecer um erro de FUSE** (ex.: *"AppImages require FUSE to run"* ou
+> `dlopen(): error loading libfuse.so.2`): distros baseadas em Ubuntu 22.04+ (como o
+> **Zorin OS 17**) não trazem o `libfuse2` por padrão. Instale-o **ou** rode sem ele:
+> ```bash
+> sudo apt install libfuse2                                    # opção 1 (permanente)
+> ./Bitswave-x86_64.AppImage --appimage-extract-and-run        # opção 2 (sem instalar nada)
+> ```
+
+#### Construir a partir do código-fonte
+
+Para gerar o AppImage você mesmo (em Linux x86_64):
 
 ```
 bash packaging/linux/build_appimage.sh

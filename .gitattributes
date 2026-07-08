@@ -1,0 +1,8 @@
+# Scripts e arquivos consumidos por sistemas Unix DEVEM usar fim de linha LF,
+# senão quebram no Linux (ex.: "/usr/bin/env bash^M: bad interpreter").
+*.sh            text eol=lf
+*.desktop       text eol=lf
+AppRun          text eol=lf
+
+# Normalização padrão para o restante (deixa o Git decidir texto vs binário).
+*               text=auto

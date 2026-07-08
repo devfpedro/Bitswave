@@ -103,6 +103,19 @@ pyinstaller Bitswave.spec
 O resultado fica em `dist/Bitswave.exe` (o `.spec` já inclui o ícone e os
 assets de `models/icons/` e da `customtkinter`).
 
+### Linux (AppImage)
+
+No Linux, o Bitswave é distribuído como **AppImage** — um único arquivo que roda por
+duplo-clique, com ícone e entrada de menu, sem instalação nem root. Para construir
+(em Linux x86_64):
+
+```
+bash packaging/linux/build_appimage.sh
+```
+
+O resultado fica em `dist/Bitswave-x86_64.AppImage`. Detalhes, requisitos de build e
+por que AppImage (e não Docker) estão em [`packaging/linux/README.md`](packaging/linux/README.md).
+
 ### Espaço em disco necessário
 
 | Método | Instalado (em repouso) | Durante a execução |
@@ -119,9 +132,10 @@ faixas continuam nas pastas originais do usuário).
 
 ## Notas de plataforma
 
-- O monitoramento automático de pastas (`folder_watch.py`) usa a API
-  `SHGetKnownFolderPath` do Windows para localizar Downloads/Músicas do usuário —
-  é específico para Windows.
+- O monitoramento automático de pastas (`folder_watch.py`) é multiplataforma: no
+  Windows usa a API `SHGetKnownFolderPath` (respeita pastas movidas pelo usuário);
+  em Linux/BSD usa `xdg-user-dir`. Em ambos, cai para `~/Downloads` e `~/Music` se
+  a resolução específica falhar.
 - A interface foi calibrada para Windows com escala de DPI de até 150%; em telas
   com escala maior, o layout de dois blocos de controles (modo / transporte) e o
   truncamento de texto evitam cortes, mas não foi testado acima desse valor.

@@ -10,6 +10,7 @@ import customtkinter as ctk
 import pygame
 
 import audio_spectrum
+from folder_watch import resolve_saved_folders
 from paths import data_path
 from player import AudioPlayer
 
@@ -158,9 +159,9 @@ class PlaybackView(ctk.CTkFrame):
         icons.apply_icon(self.btn_shuffle, "shuffle", theme.TEXT_SECONDARY, theme.TEXT_PRIMARY)
         add_tooltip(self.btn_shuffle, "Aleatório")
 
-        self.btn_repeat = ctk.CTkButton(mode_row, text=self.ICON_REPEAT, command=self._on_cycle_repeat, **mode_cfg)
+        self.btn_repeat = ctk.CTkButton(mode_row, text=self.ICON_REPEAT, command=self._on_toggle_repeat, **mode_cfg)
         self.btn_repeat.pack(side="left", padx=10)
-        add_tooltip(self.btn_repeat, "Repetir")
+        add_tooltip(self.btn_repeat, "Repetir faixa atual")
         self._img_repeat = icons.get("repeat", 18, theme.TEXT_SECONDARY)
         self._img_repeat_one = icons.get("repeat_one", 18, theme.TEXT_SECONDARY)
         self._set_repeat_icon()
@@ -275,11 +276,11 @@ class PlaybackView(ctk.CTkFrame):
             self.slider_volume.set(volume)
             self._on_volume_change(volume)
 
-        watch_folders = data.get("watch_folders")
-        if isinstance(watch_folders, list):
-            valid = [f for f in watch_folders if isinstance(f, str) and os.path.isdir(f)]
-            if valid:
-                self.app.folder_watcher.folders = valid
+        # Respeita a preferência salva de pastas -- inclusive uma lista esvaziada --
+        # em vez de recair nas pastas padrão (ver resolve_saved_folders).
+        self.app.folder_watcher.folders = resolve_saved_folders(
+            data, self.app.folder_watcher.folders
+        )
 
         queue = [f for f in data.get("queue", []) if isinstance(f, str) and os.path.isfile(f)]
         if not queue:
@@ -297,21 +298,21 @@ class PlaybackView(ctk.CTkFrame):
         self.app.show_playlist_selection()
 
     def _on_add_files(self) -> None:
-        """Abre diálogo para tocar arquivos MP3 avulsos (fila temporária, sem salvar playlist).
+        """Abre diálogo para tocar arquivos MP3 avulsos como uma playlist temporária.
 
-        Toca imediatamente o primeiro arquivo escolhido, interrompendo a faixa atual se
-        houver uma tocando: o botão existe para o caso de uso "quero ouvir isto agora",
-        não para enfileirar silenciosamente ao final (antes só tocava na hora se a fila
-        estivesse vazia -- escolher um arquivo com algo já tocando não fazia nada visível).
+        A seleção (1 ou vários arquivos, sem limite) *substitui* a fila atual e vira uma
+        "playlist não salva": toca do primeiro em diante, e as faixas seguintes avançam
+        em sequência via _auto_next, respeitando Aleatório/Repetir se estiverem ativos
+        (o estado desses modos é preservado -- só a fila é trocada). Uma nova seleção
+        aqui, ou iniciar uma playlist salva (load_queue), descarta esta fila temporária.
         """
         files = filedialog.askopenfilenames(
             title="Selecionar arquivos MP3", filetypes=[("Arquivos MP3", "*.mp3")],
         )
         if not files:
             return
-        self._queue.extend(f for f in files if f not in self._queue)
-        target_index = self._queue.index(files[0])
-        if self._load_track(target_index):
+        self._queue = list(files)
+        if self._load_track(0):
             self.player.play()
             self._set_play_icon(True)
             self.waveform.set_playing(True)
@@ -488,9 +489,13 @@ class PlaybackView(ctk.CTkFrame):
         self._shuffle = not self._shuffle
         self.btn_shuffle.configure(fg_color=theme.ACCENT_ACTIVE if self._shuffle else "transparent")
 
-    def _on_cycle_repeat(self) -> None:
-        order = ["off", "all", "one"]
-        self._repeat_mode = order[(order.index(self._repeat_mode) + 1) % len(order)]
+    def _on_toggle_repeat(self) -> None:
+        """Liga/desliga a repetição da faixa atual (loop ininterrupto até desativar).
+
+        Alterna apenas entre "off" e "one": ao final da faixa, se ativo, ela recomeça
+        do zero indefinidamente (ver _auto_next), independente de haver ou não playlist.
+        """
+        self._repeat_mode = "one" if self._repeat_mode == "off" else "off"
         self._set_repeat_icon()
 
     def _set_play_icon(self, playing: bool) -> None:
@@ -503,13 +508,12 @@ class PlaybackView(ctk.CTkFrame):
 
     def _set_repeat_icon(self) -> None:
         """Atualiza o ícone/realce do botão de repetição conforme o modo atual."""
-        active = self._repeat_mode != "off"
-        img = self._img_repeat_one if self._repeat_mode == "one" else self._img_repeat
+        active = self._repeat_mode == "one"
+        img = self._img_repeat_one if active else self._img_repeat
         if img is not None:
             self.btn_repeat.configure(image=img, text="")
         else:
-            text = self.ICON_REPEAT_ONE if self._repeat_mode == "one" else self.ICON_REPEAT
-            self.btn_repeat.configure(text=text)
+            self.btn_repeat.configure(text=self.ICON_REPEAT_ONE if active else self.ICON_REPEAT)
         self.btn_repeat.configure(fg_color=theme.ACCENT_ACTIVE if active else "transparent")
 
     # ------------------------------------------------------------------
@@ -548,6 +552,7 @@ class PlaybackView(ctk.CTkFrame):
 
     def _start_update_loop(self) -> None:
         self._update_progress()
+        self._update_spectrum()
         self._check_music_end()
 
     def _update_progress(self) -> None:
@@ -559,8 +564,22 @@ class PlaybackView(ctk.CTkFrame):
             fraction = pos_sec / self._current_duration
             self.slider_progress.set(fraction)
             self.lbl_elapsed.configure(text=_format_time(pos_sec))
-            self.waveform.set_position(pos_sec)
         self.after(200, self._update_progress)
+
+    def _update_spectrum(self) -> None:
+        """Sincroniza a posição do espectro numa cadência alta (~20 fps), separada do
+        loop de progresso de 200 ms.
+
+        O espectro é pré-calculado em quadros de ~80 ms; amostrar a posição só a cada
+        200 ms (junto do slider/labels) fazia as barras avançarem em degraus de ~5 fps,
+        com aparência de travamento/dessincronia. Este tick dedicado atualiza apenas a
+        posição consultada pelo WaveformCanvas -- sem redesenhar slider ou textos, que
+        não precisam dessa frequência.
+        """
+        if self.player.is_playing() and not self._seeking and self._current_duration > 0:
+            pos_sec = min(self._elapsed_offset + self.player.get_position(), self._current_duration)
+            self.waveform.set_position(pos_sec)
+        self.after(50, self._update_spectrum)
 
     def _check_music_end(self) -> None:
         if not self._seeking and self.player.has_finished():
@@ -582,11 +601,6 @@ class PlaybackView(ctk.CTkFrame):
             return
         if self._index < len(self._queue) - 1:
             self._on_next()
-        elif self._repeat_mode == "all" and self._queue:
-            if self._load_track(0):
-                self.player.play()
-                self._set_play_icon(True)
-                self.waveform.set_playing(True)
         else:
             self.player.stop()
             self._set_play_icon(False)

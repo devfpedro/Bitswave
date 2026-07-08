@@ -1,6 +1,8 @@
 """Tela de atalhos de teclado (somente leitura, baseada em ui/shortcuts.py)."""
 import customtkinter as ctk
 
+from version import __version__
+
 from . import icons, theme
 from .shortcuts import SHORTCUTS
 from .tooltip import add_tooltip
@@ -43,6 +45,10 @@ class ShortcutsView(ctk.CTkFrame):
             box, text="Controle o Bitswave sem tirar as mãos do teclado",
             font=ctk.CTkFont(size=12), text_color=theme.TEXT_SECONDARY,
         ).pack(anchor="w")
+        ctk.CTkLabel(
+            box, text=f"Bitswave v{__version__}",
+            font=ctk.CTkFont(size=11), text_color=theme.TEXT_MUTED,
+        ).pack(anchor="w", pady=(4, 0))
 
     def _build_list(self) -> None:
         scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")

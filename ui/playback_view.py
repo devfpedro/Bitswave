@@ -298,21 +298,21 @@ class PlaybackView(ctk.CTkFrame):
         self.app.show_playlist_selection()
 
     def _on_add_files(self) -> None:
-        """Abre diálogo para tocar arquivos MP3 avulsos (fila temporária, sem salvar playlist).
+        """Abre diálogo para tocar arquivos MP3 avulsos como uma playlist temporária.
 
-        Toca imediatamente o primeiro arquivo escolhido, interrompendo a faixa atual se
-        houver uma tocando: o botão existe para o caso de uso "quero ouvir isto agora",
-        não para enfileirar silenciosamente ao final (antes só tocava na hora se a fila
-        estivesse vazia -- escolher um arquivo com algo já tocando não fazia nada visível).
+        A seleção (1 ou vários arquivos, sem limite) *substitui* a fila atual e vira uma
+        "playlist não salva": toca do primeiro em diante, e as faixas seguintes avançam
+        em sequência via _auto_next, respeitando Aleatório/Repetir se estiverem ativos
+        (o estado desses modos é preservado -- só a fila é trocada). Uma nova seleção
+        aqui, ou iniciar uma playlist salva (load_queue), descarta esta fila temporária.
         """
         files = filedialog.askopenfilenames(
             title="Selecionar arquivos MP3", filetypes=[("Arquivos MP3", "*.mp3")],
         )
         if not files:
             return
-        self._queue.extend(f for f in files if f not in self._queue)
-        target_index = self._queue.index(files[0])
-        if self._load_track(target_index):
+        self._queue = list(files)
+        if self._load_track(0):
             self.player.play()
             self._set_play_icon(True)
             self.waveform.set_playing(True)

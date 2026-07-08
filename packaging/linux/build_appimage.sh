@@ -31,10 +31,14 @@ pip install -r "$ROOT/requirements.txt" pyinstaller
 
 echo ">> [3/6] Empacotando com PyInstaller (onefile)"
 # No Linux o separador de --add-data é ':' (no Windows é ';').
+# --hidden-import PIL._tkinter_finder: sem isso, o Pillow não acha o _tkinter
+# empacotado em tempo de execução e qualquer widget com imagem (ícones) quebra
+# com "ModuleNotFoundError: No module named 'PIL._tkinter_finder'" ao iniciar.
 pyinstaller --noconfirm --clean \
   --name bitswave --onefile --windowed \
   --add-data "$ROOT/models/icons:models/icons" \
   --collect-all customtkinter \
+  --hidden-import PIL._tkinter_finder \
   --distpath "$BUILD/dist" --workpath "$BUILD/work" --specpath "$BUILD" \
   "$ROOT/main.py"
 

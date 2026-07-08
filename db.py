@@ -4,6 +4,8 @@ import random
 import sqlite3
 from datetime import datetime
 
+from paths import data_path
+
 DB_FILENAME = "audioplayer.db"
 ORDER_MODES = ("sequencial", "alfabetica", "aleatoria")
 
@@ -13,7 +15,7 @@ class PlaylistDB:
 
     def __init__(self, db_path: str | None = None):
         if db_path is None:
-            db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), DB_FILENAME)
+            db_path = data_path(DB_FILENAME)
         self._conn = sqlite3.connect(db_path)
         self._conn.execute("PRAGMA foreign_keys = ON")
         self._conn.row_factory = sqlite3.Row

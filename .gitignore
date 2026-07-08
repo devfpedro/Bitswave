@@ -6,3 +6,5 @@ graphify-out/
 .pytest_cache/
 player_config.json
 audioplayer.db
+build/
+dist/

@@ -12,9 +12,9 @@ from functools import lru_cache
 import customtkinter as ctk
 from PIL import Image, ImageOps
 
-_ICONS_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models", "icons"
-)
+from paths import resource_path
+
+_ICONS_DIR = resource_path("models", "icons")
 
 DEFAULT_SIZE = 20
 HOVER_SIZE_BUMP = 2

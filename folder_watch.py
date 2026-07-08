@@ -76,7 +76,16 @@ class FolderWatcher:
             self.folders.remove(path)
 
     def scan(self, limit: int = 30) -> list[str]:
-        """Retorna os arquivos de áudio das pastas monitoradas, mais recentes primeiro."""
+        """Retorna os arquivos de áudio das pastas monitoradas, mais recentes primeiro.
+
+        "Mais recente" usa o mais tardio entre `st_ctime` (data de criação do arquivo
+        *neste disco*, no Windows) e `st_mtime` (última modificação do conteúdo).
+        Só mtime não bastava: copiar/baixar um arquivo costuma preservar o mtime
+        original (data de quando o conteúdo foi criado, não de quando chegou aqui) --
+        uma pasta de música inteira migrada para a máquina em um único dia aparecia
+        "antiga" no painel, atrás de poucos arquivos com mtime coincidentemente mais
+        recente, mesmo tendo chegado à pasta monitorada há muito mais tempo.
+        """
         found: dict[str, float] = {}
         for folder in self.folders:
             try:
@@ -88,10 +97,10 @@ class FolderWatcher:
                         if ext not in AUDIO_EXTENSIONS:
                             continue
                         try:
-                            mtime = entry.stat().st_mtime
+                            stat = entry.stat()
                         except OSError:
                             continue
-                        found[entry.path] = mtime
+                        found[entry.path] = max(stat.st_ctime, stat.st_mtime)
             except OSError:
                 continue
         ordered = sorted(found.items(), key=lambda item: item[1], reverse=True)

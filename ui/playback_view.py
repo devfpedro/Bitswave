@@ -10,6 +10,7 @@ import customtkinter as ctk
 import pygame
 
 import audio_spectrum
+from paths import data_path
 from player import AudioPlayer
 
 from . import icons, theme
@@ -18,9 +19,7 @@ from .tooltip import add_tooltip
 from .utils import build_settings_button, ellipsize as _ellipsize, format_time as _format_time
 from .waveform import WaveformCanvas
 
-CONFIG_FILE = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "player_config.json"
-)
+CONFIG_FILE = data_path("player_config.json")
 
 
 class PlaybackView(ctk.CTkFrame):
@@ -298,15 +297,21 @@ class PlaybackView(ctk.CTkFrame):
         self.app.show_playlist_selection()
 
     def _on_add_files(self) -> None:
-        """Abre diálogo para tocar arquivos MP3 avulsos (fila temporária, sem salvar playlist)."""
+        """Abre diálogo para tocar arquivos MP3 avulsos (fila temporária, sem salvar playlist).
+
+        Toca imediatamente o primeiro arquivo escolhido, interrompendo a faixa atual se
+        houver uma tocando: o botão existe para o caso de uso "quero ouvir isto agora",
+        não para enfileirar silenciosamente ao final (antes só tocava na hora se a fila
+        estivesse vazia -- escolher um arquivo com algo já tocando não fazia nada visível).
+        """
         files = filedialog.askopenfilenames(
             title="Selecionar arquivos MP3", filetypes=[("Arquivos MP3", "*.mp3")],
         )
         if not files:
             return
-        start_fresh = not self._queue
         self._queue.extend(f for f in files if f not in self._queue)
-        if start_fresh and self._load_track(0):
+        target_index = self._queue.index(files[0])
+        if self._load_track(target_index):
             self.player.play()
             self._set_play_icon(True)
             self.waveform.set_playing(True)

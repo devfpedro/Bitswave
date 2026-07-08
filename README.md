@@ -43,10 +43,13 @@ com a faixa tocando.
 
 ```
 main.py                    # ponto de entrada
+paths.py                   # resolve caminhos de asset (somente-leitura) vs. dados (graváveis),
+                            # necessário para o .exe empacotado funcionar corretamente
 player.py                  # AudioPlayer: playback (pygame.mixer) + metadados (mutagen)
 audio_spectrum.py          # análise de espectro (FFT) usada pela waveform
 db.py                       # PlaylistDB: persistência de playlists (SQLite)
 folder_watch.py             # descoberta de pastas conhecidas do Windows + varredura de áudio
+Bitswave.spec               # receita do PyInstaller para gerar o .exe
 ui/
   app.py                    # janela principal, navegação entre telas, atalhos globais
   playback_view.py          # tela "Now Playing"
@@ -66,7 +69,15 @@ models/
 tests/                       # suíte pytest (player, db)
 ```
 
-## Rodando localmente
+## Instalação
+
+**Executável (recomendado para uso normal):** baixe `Bitswave.exe` na aba
+[Releases](https://github.com/devfpedro/Bitswave/releases) do GitHub e rode —
+não precisa de Python instalado. Na primeira execução o Windows Defender
+SmartScreen pode avisar que é um app de "editor desconhecido" (não é
+assinado digitalmente); clique em "Mais informações" → "Executar assim mesmo".
+
+**A partir do código-fonte (para desenvolver):**
 
 ```
 python -m venv venv
@@ -81,6 +92,30 @@ Para rodar os testes:
 pip install -r requirements-dev.txt
 pytest
 ```
+
+Para gerar o `.exe` você mesmo:
+
+```
+pip install pyinstaller
+pyinstaller Bitswave.spec
+```
+
+O resultado fica em `dist/Bitswave.exe` (o `.spec` já inclui o ícone e os
+assets de `models/icons/` e da `customtkinter`).
+
+### Espaço em disco necessário
+
+| Método | Instalado (em repouso) | Durante a execução |
+|---|---|---|
+| `.exe` (Releases) | ~44 MB | +~85 MB temporários em `%TEMP%` (a build `--onefile` se autoextrai a cada abertura); liberados ao fechar o app normalmente |
+| Código-fonte + venv | ~6 MB (código) + ~150 MB (dependências Python) | sem uso extra de `%TEMP%` |
+
+O `.exe` some com a pasta temporária de ~85MB ao fechar a janela normalmente.
+Se o processo for encerrado à força (Gerenciador de Tarefas, queda de energia),
+essa pasta pode ficar para trás em `%TEMP%\_MEI*` e se acumular a cada crash —
+seguro de apagar manualmente se notar acúmulo. Nenhum dos dois métodos conta o
+espaço da sua biblioteca de música em si, que não é copiada pelo app (as
+faixas continuam nas pastas originais do usuário).
 
 ## Notas de plataforma
 

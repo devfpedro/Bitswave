@@ -6,6 +6,7 @@ import customtkinter as ctk
 
 from db import PlaylistDB
 from folder_watch import FolderWatcher, default_watch_folders
+from paths import resource_path
 from player import AudioPlayer
 
 from . import theme
@@ -14,9 +15,8 @@ from .playlist_detail_view import PlaylistDetailView
 from .playlist_selection_view import PlaylistSelectionView
 from .shortcuts_view import ShortcutsView
 
-_MODELS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models")
-ICON_PATH = os.path.join(_MODELS_DIR, "iconApp.png")
-ICON_ICO_PATH = os.path.join(_MODELS_DIR, "iconApp.ico")
+ICON_PATH = resource_path("models", "icons", "iconApp.png")
+ICON_ICO_PATH = resource_path("models", "icons", "iconApp.ico")
 
 
 class App(ctk.CTk):

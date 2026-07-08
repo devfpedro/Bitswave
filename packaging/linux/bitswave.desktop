@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Bitswave
+GenericName=Music Player
+Comment=Reprodutor de MP3 com espectro de áudio, playlists e pastas monitoradas
+Exec=bitswave
+Icon=bitswave
+Categories=AudioVideo;Audio;Player;
+Terminal=false
+StartupWMClass=Bitswave
+Keywords=music;mp3;player;audio;bitswave;

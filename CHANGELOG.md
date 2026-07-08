@@ -7,6 +7,10 @@ e o projeto adota [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 ## [1.0.1] - 2026-07-08
 
 ### Added
+- **Suporte a Linux via AppImage** (T8): novo `packaging/linux/` com script de build
+  (`build_appimage.sh`), entrada `.desktop` e ícone. Gera um `Bitswave-x86_64.AppImage`
+  executável por duplo-clique, com ícone e menu, sem instalação nem root. Descoberta de
+  pastas Downloads/Músicas agora é multiplataforma (`xdg-user-dir` no Linux).
 - **Playlist temporária por seleção múltipla** (T7): o botão "＋" agora aceita vários
   arquivos de uma vez e os reproduz em sequência como uma playlist não salva, sem limite
   de faixas. Uma nova seleção — ou iniciar uma playlist salva — descarta a fila anterior.
@@ -15,6 +19,10 @@ e o projeto adota [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 - Versão do app exibida na tela de Atalhos e centralizada em `version.py`.
 
 ### Fixed
+- **Espectro de áudio com travamentos** (T1): a posição que indexa o quadro do espectro
+  (quadros de ~80 ms) só era amostrada no loop de 200 ms, fazendo as barras avançarem a
+  ~5 fps. Agora um tick dedicado de 50 ms alimenta a posição e o canvas redesenha a 20 fps
+  (medido: ~5 → ~19 atualizações/s).
 - **Ícone da barra de título desproporcional** (T2): `iconApp.png` era 666×375 (paisagem)
   e era esticado para o slot quadrado, achatando o logo numa tira vertical. Regenerado
   como PNG quadrado 409×409 com o logo centrado.

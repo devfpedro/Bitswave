@@ -1,5 +1,6 @@
 """Janela principal: hospeda as 3 telas e gerencia a navegação entre elas."""
 import os
+import sys
 import tkinter as tk
 
 import customtkinter as ctk
@@ -62,8 +63,10 @@ class App(ctk.CTk):
     def _set_window_icon(self) -> None:
         # iconbitmap (.ico) é o que o Windows realmente usa para o ícone no canto
         # superior esquerdo da barra de título; iconphoto (.png) cobre a barra de
-        # tarefas/Alt+Tab. Os dois são necessários para o ícone aparecer em todo lugar.
-        if os.path.isfile(ICON_ICO_PATH):
+        # tarefas/Alt+Tab. Os dois são necessários para o ícone aparecer em todo lugar
+        # no Windows. No Linux, o Tk/X11 não entende .ico (espera XBM) e o ícone vem
+        # do iconphoto (.png) + do .desktop do AppImage, então pulamos o iconbitmap.
+        if sys.platform == "win32" and os.path.isfile(ICON_ICO_PATH):
             try:
                 self.iconbitmap(default=ICON_ICO_PATH)
             except tk.TclError:

@@ -1,7 +1,15 @@
 """Testes da resolução de pastas monitoradas (T4: remoção deve persistir)."""
 import os
 
-from folder_watch import resolve_saved_folders
+from folder_watch import default_watch_folders, resolve_saved_folders
+
+
+def test_default_watch_folders_are_existing_dirs():
+    """Multiplataforma (T8): retorna uma lista de diretórios existentes, sem duplicatas."""
+    folders = default_watch_folders()
+    assert isinstance(folders, list)
+    assert all(os.path.isdir(f) for f in folders)
+    assert len(folders) == len(set(folders))
 
 
 def test_key_absent_uses_defaults():

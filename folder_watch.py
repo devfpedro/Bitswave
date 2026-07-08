@@ -1,59 +1,90 @@
-"""Descoberta de pastas conhecidas do Windows e varredura por novos arquivos de áudio."""
-import ctypes
+"""Descoberta das pastas Downloads/Músicas do usuário e varredura por arquivos de áudio.
+
+Multiplataforma: no Windows resolve as *Known Folders* (respeita pastas movidas pelo
+usuário) via shell32; em Linux/BSD usa `xdg-user-dir`. Em ambos, cai para
+``~/Downloads`` e ``~/Music`` se a resolução específica da plataforma falhar.
+"""
 import os
-import uuid
-from ctypes import wintypes
+import sys
 
 AUDIO_EXTENSIONS = {".mp3", ".wav", ".ogg", ".flac", ".m4a"}
 
-_FOLDERID_DOWNLOADS = "{374DE290-123F-4565-9164-39C4925E467B}"
-_FOLDERID_MUSIC = "{4BD8D571-6D19-48D3-BE97-422220080E43}"
 
+if sys.platform == "win32":
+    import ctypes
+    import uuid
+    from ctypes import wintypes
 
-class _GUID(ctypes.Structure):
-    _fields_ = [
-        ("Data1", wintypes.DWORD),
-        ("Data2", wintypes.WORD),
-        ("Data3", wintypes.WORD),
-        ("Data4", ctypes.c_byte * 8),
-    ]
+    _FOLDERID_DOWNLOADS = "{374DE290-123F-4565-9164-39C4925E467B}"
+    _FOLDERID_MUSIC = "{4BD8D571-6D19-48D3-BE97-422220080E43}"
 
-    def __init__(self, guid_str: str):
-        super().__init__()
-        u = uuid.UUID(guid_str)
-        self.Data1, self.Data2, self.Data3 = u.fields[0], u.fields[1], u.fields[2]
-        for i, byte in enumerate(u.bytes[8:]):
-            self.Data4[i] = byte
+    class _GUID(ctypes.Structure):
+        _fields_ = [
+            ("Data1", wintypes.DWORD),
+            ("Data2", wintypes.WORD),
+            ("Data3", wintypes.WORD),
+            ("Data4", ctypes.c_byte * 8),
+        ]
 
+        def __init__(self, guid_str: str):
+            super().__init__()
+            u = uuid.UUID(guid_str)
+            self.Data1, self.Data2, self.Data3 = u.fields[0], u.fields[1], u.fields[2]
+            for i, byte in enumerate(u.bytes[8:]):
+                self.Data4[i] = byte
 
-def _known_folder_path(guid_str: str) -> str | None:
-    """Resolve uma Known Folder do Windows (respeita pastas movidas pelo usuário)."""
-    try:
-        guid = _GUID(guid_str)
-        path_ptr = ctypes.c_wchar_p()
-        result = ctypes.windll.shell32.SHGetKnownFolderPath(  # type: ignore[attr-defined]
-            ctypes.byref(guid), 0, 0, ctypes.byref(path_ptr)
-        )
-        if result != 0 or not path_ptr.value:
+    def _known_folder_path(guid_str: str) -> str | None:
+        """Resolve uma Known Folder do Windows (respeita pastas movidas pelo usuário)."""
+        try:
+            guid = _GUID(guid_str)
+            path_ptr = ctypes.c_wchar_p()
+            result = ctypes.windll.shell32.SHGetKnownFolderPath(  # type: ignore[attr-defined]
+                ctypes.byref(guid), 0, 0, ctypes.byref(path_ptr)
+            )
+            if result != 0 or not path_ptr.value:
+                return None
+            path = path_ptr.value
+            ctypes.windll.ole32.CoTaskMemFree(path_ptr)  # type: ignore[attr-defined]
+            return path
+        except Exception:
             return None
-        path = path_ptr.value
-        ctypes.windll.ole32.CoTaskMemFree(path_ptr)  # type: ignore[attr-defined]
-        return path
-    except Exception:
-        return None
+
+    def _resolve_platform_folders() -> list[tuple[str | None, str]]:
+        return [
+            (_known_folder_path(_FOLDERID_DOWNLOADS), "Downloads"),
+            (_known_folder_path(_FOLDERID_MUSIC), "Music"),
+        ]
+
+else:
+    def _xdg_user_dir(name: str) -> str | None:
+        """Resolve uma pasta de usuário XDG (Linux/BSD) via `xdg-user-dir`, se disponível."""
+        try:
+            import subprocess
+
+            out = subprocess.run(
+                ["xdg-user-dir", name], capture_output=True, text=True, timeout=2
+            ).stdout.strip()
+            return out or None
+        except Exception:
+            return None
+
+    def _resolve_platform_folders() -> list[tuple[str | None, str]]:
+        return [
+            (_xdg_user_dir("DOWNLOAD"), "Downloads"),
+            (_xdg_user_dir("MUSIC"), "Music"),
+        ]
 
 
 def default_watch_folders() -> list[str]:
     """Pastas monitoradas por padrão: Downloads e Músicas do usuário atual."""
-    downloads = _known_folder_path(_FOLDERID_DOWNLOADS) or os.path.join(
-        os.path.expanduser("~"), "Downloads"
-    )
-    music = _known_folder_path(_FOLDERID_MUSIC) or os.path.join(os.path.expanduser("~"), "Music")
+    home = os.path.expanduser("~")
+    fallbacks = {"Downloads": os.path.join(home, "Downloads"), "Music": os.path.join(home, "Music")}
 
-    folders = []
-    for folder in (downloads, music):
-        if folder and os.path.isdir(folder) and folder not in folders:
-            folders.append(folder)
+    folders: list[str] = []
+    for resolved, key in _resolve_platform_folders():
+        path = resolved or fallbacks[key]
+        if path and os.path.isdir(path) and path not in folders:
+            folders.append(path)
     return folders
 
 
